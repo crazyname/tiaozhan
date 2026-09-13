@@ -1,0 +1,19 @@
+﻿页码,页面标题,推荐素材类型,建议文件,应保留文字,版式建议
+P1,封面,大图背景：茶园/采茶人物照片,assets/photos/photo_01_fenghuang_tea_garden_picker.png,标题、项目副标题、学校与团队信息,背景图全屏；右侧叠加半透明技术链
+P2,一杯好单丛，最难复制的是“做青”,主图：凤凰单丛加工流程图,assets/figures/fig_01_processing_flow.png,三大痛点：状态难感知 / 经验难量化 / 工艺难自适应,左图右文或整页主图
+P3,老师傅究竟在“感知”什么？,核心图：老师傅经验→机器可感知信号,assets/figures/fig_02_teacher_to_sensor_mapping.png,底部保留一句总结,可占页面 70% 以上
+P4,已有技术解决了什么？,核心图：已有基础 / 仍待突破 对照图,assets/figures/fig_08_prior_work_vs_gap.png,已有基础、仍待突破、结论,建议整页主图
+P5,我们的解决方案,核心图：闭环架构图,assets/figures/fig_03_closed_loop_architecture.png,一句核心结论,建议居中大图
+P6,机器如何“闻懂”茶叶？,结构参考图：电子鼻工作流程,assets/photos/ref_figure_electronic_nose_workflow.png,右侧补“工程问题与解决方案”四条,左图右文
+P7,机器如何“看懂”茶叶？,主图：鲜叶/晒青凉青场景照片,assets/photos/photo_02_fresh_leaves_on_bamboo_trays.png,右侧写视觉特征、失水率、叶温,图文排版
+P8,不是堆传感器，而是估计一个“做青状态”,核心图：状态估计与成熟度示意,assets/figures/fig_09_state_estimation.png,状态估计结果、综合状态指数、模型置信度,建议整页主图
+P9,下一次摇青，不再由“时钟”决定,核心图：Time-based vs State-based 对比图,assets/figures/fig_10_time_vs_state_control.png,传统方式 vs 本系统,建议整页主图
+P10,第一代样机：先做到“可靠”，再追求“智能”,参考图：气敏传感器板卡,assets/photos/ref_photo_gas_sensor_board.png,感知模块 / 控制模块 / 执行模块 / 软件,左图右文
+P11,如何证明它真的比固定程序更好？,核心图：三组对照实验设计,assets/figures/fig_05_experiment_design.png,底部补一句“避免同批次数据泄漏”,建议整页主图
+P12,我们真正追求的不是识别率,核心图：四级阶梯图,assets/figures/fig_11_goal_ladder.png,已有研究重点 vs 本项目重点,整页主图
+P13,三大核心创新,核心图：三项创新卡片,assets/figures/fig_12_three_innovations.png,创新一/二/三 + 核心突破,整页主图
+P14,让老师傅的经验留下来，而不是消失,核心图：传统经验 vs 数字工艺,assets/figures/fig_13_value_chain.png,三类价值点,整页主图
+P15,从一间实验室，走进一座茶山,落地场景图：茶园/采茶人物照片,assets/photos/photo_01_fenghuang_tea_garden_picker.png,实验室验证→茶厂辅助→半自动→生产线,图放右侧或背景半图
+P16,项目研发路线,核心图：12个月路线图,assets/figures/fig_06_roadmap_12m.png,阶段目标一句话,建议全宽大图
+P17,团队需要解决五类问题,核心图：五模块协作图,assets/figures/fig_14_team_collaboration.png,团队分工与关键提醒,整页主图
+P18,结束页,大图背景：茶园/采茶人物大图,assets/photos/photo_01_fenghuang_tea_garden_picker.png,结束语与项目全称,可与P1统一风格
