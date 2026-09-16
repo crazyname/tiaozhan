@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Local experiment data: raw data should be backed up separately before any curated upload
+data/raw/*
+!data/raw/.gitkeep
+
+# Generated logs / caches
+*.log
+*.tmp
+
+# Presentation / Office temporary files
+~$*.pptx
+~$*.docx
