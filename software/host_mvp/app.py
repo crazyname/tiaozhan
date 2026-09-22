@@ -13,6 +13,7 @@ from labels import SCALE_VERSION, STAGES, ACTIONS, SCORES
 from schema import HOST_VERSION, SENSOR_FIELDS, EVENT_FIELDS, now_iso, default_batch_id, finite_number
 from storage import SessionLogger as BaseSessionLogger
 from metadata import TEXT_FIELDS, normalize_metadata, load_profile, save_profile
+from camera_process import camera_settings
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DATA_ROOT = REPO_ROOT / "data" / "raw"
@@ -231,8 +232,11 @@ class MainWindow(QtWidgets.QMainWindow):
             entry = QtWidgets.QLineEdit(); entry.setPlaceholderText(name + "（未知可空）")
             self.meta_inputs[key] = entry; metadata.addWidget(entry)
         self.batch_metadata = normalize_metadata()
+        self.camera_settings = camera_settings()
         self.metadata_button = QtWidgets.QPushButton("批次 / 标定 / SOP 档案")
         self.metadata_button.clicked.connect(self.edit_metadata); metadata.addWidget(self.metadata_button)
+        self.camera_button = QtWidgets.QPushButton("相机参数")
+        self.camera_button.clicked.connect(self.edit_camera); metadata.addWidget(self.camera_button)
         self.replay_button = QtWidgets.QPushButton("历史回放 / 对比")
         self.replay_button.clicked.connect(self.open_replay); metadata.addWidget(self.replay_button)
         layout.insertLayout(2, metadata)
@@ -294,6 +298,30 @@ class MainWindow(QtWidgets.QMainWindow):
             self.replay_window = ReplayWindow(self)
         self.replay_window.show(); self.replay_window.raise_()
 
+    def edit_camera(self):
+        if self.logger.active or self.finishing:
+            return
+        dialog = QtWidgets.QDialog(self); dialog.setWindowTitle("相机参数 · 留空则不改变驱动设置")
+        form = QtWidgets.QFormLayout(dialog)
+        index = QtWidgets.QSpinBox(); index.setRange(0, 20); index.setValue(self.camera_settings["index"])
+        form.addRow("相机编号", index)
+        entries = {}
+        for key, title in [("exposure", "固定曝光（DirectShow驱动单位）"), ("white_balance", "固定白平衡（驱动色温）")]:
+            entry = QtWidgets.QLineEdit()
+            entry.setText(str(self.camera_settings[key]) if self.camera_settings[key] is not None else "")
+            entries[key] = entry; form.addRow(title, entry)
+        error = QtWidgets.QLabel("请求和驱动读回会留档；不代表固定光照或色卡校准已完成。")
+        error.setWordWrap(True); form.addRow(error)
+        button = QtWidgets.QPushButton("应用到下一批")
+        def apply():
+            try:
+                self.camera_settings = camera_settings(dict(index=index.value(), **{
+                    key: float(entry.text()) if entry.text().strip() else None for key, entry in entries.items()}))
+                dialog.accept()
+            except ValueError as exc:
+                error.setText(str(exc))
+        button.clicked.connect(apply); form.addRow(button); dialog.exec()
+
     def toggle_connection(self):
         if self.reader and self.reader.isRunning():
             self.disconnecting = True; self.reader.stop(); self.connect_btn.setEnabled(False)
@@ -341,12 +369,13 @@ class MainWindow(QtWidgets.QMainWindow):
             if self.reader.tracker.pending or "CALIBRATING" in str(self.reader.latest.get("quality_flag", "")):
                 raise RuntimeError("请等待设备命令或标定完成")
             root = self.logger.start(self.batch_edit.text(), self.operator_edit.text(), "simulate" if self.reader.simulate else "serial",
-                                     dict(self.batch_metadata, **{k: w.text().strip() or None for k, w in self.meta_inputs.items()}))
+                                     dict(self.batch_metadata, **{k: w.text().strip() or None for k, w in self.meta_inputs.items()}),
+                                     camera_settings=self.camera_settings)
         except Exception as exc:
             self.on_error(f"开始失败: {exc}"); return
         self.finishing = False; self.shown_error = ""
         self.start_btn.setEnabled(False); self.stop_btn.setEnabled(True); self.connect_btn.setEnabled(False)
-        for w in [self.batch_edit, self.operator_edit, self.metadata_button, *self.meta_inputs.values()]:
+        for w in [self.batch_edit, self.operator_edit, self.metadata_button, self.camera_button, *self.meta_inputs.values()]:
             w.setEnabled(False)
         self.loss_label.setText("失水率: --")
         self.append_log(f"批次开始: {root}"); self.photo_timer.start(30000); self.auto_snapshot()
@@ -439,7 +468,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.append_log(f"批次收尾完成: {self.logger.writer.report}；错误: {self.logger.error or '无'}")
             self.start_btn.setEnabled(True); self.connect_btn.setEnabled(True)
             self.batch_metadata["initial_mass_g"] = None
-            for w in [self.batch_edit, self.operator_edit, self.metadata_button, *self.meta_inputs.values()]:
+            for w in [self.batch_edit, self.operator_edit, self.metadata_button, self.camera_button, *self.meta_inputs.values()]:
                 w.setEnabled(True)
             self.batch_edit.setText(default_batch_id())
         if self.disconnecting and self.reader and not self.reader.isRunning():

@@ -19,13 +19,17 @@ from labels import LABEL_FIELDS, SCALE_VERSION, validate_label
 from schema import HOST_VERSION, SENSOR_FIELDS, EVENT_FIELDS, IMAGE_FIELDS, now_iso, default_batch_id, sensor_row, finite_number
 from session_check import write_session_check
 from metadata import METADATA_VERSION, normalize_metadata, metadata_digest
+from camera_process import camera_settings as normalize_camera_settings
 
 TABLES = {"sensor_1hz": SENSOR_FIELDS, "events": EVENT_FIELDS, "image_index": IMAGE_FIELDS, "master_labels": LABEL_FIELDS}
 
 class DiagnosticJournal:
     """Connection-wide journal, including commands issued before a batch."""
-    def __init__(self, root):
+    def __init__(self, root, segment_bytes=16*1024*1024, max_segments=64):
+        if segment_bytes < 1 or max_segments < 1:
+            raise ValueError("日志段大小和段数必须为正数")
         self.root = Path(root)
+        self.segment_bytes, self.max_segments = segment_bytes, max_segments
         self.queue = queue.Queue(4096)
         self.closing = threading.Event()
         self.error = ""
@@ -45,19 +49,32 @@ class DiagnosticJournal:
                 self.error = "设备日志队列已满，连接日志不完整"
 
     def _run(self):
+        handle = None
         try:
             self.root.mkdir(parents=True, exist_ok=True)
-            path = self.root / (default_batch_id() + "_" + uuid.uuid4().hex[:8] + ".jsonl")
-            with path.open("w", encoding="utf-8") as handle:
-                while not (self.closing.is_set() and self.queue.empty()):
-                    try:
-                        item = self.queue.get(timeout=0.05)
-                    except queue.Empty:
-                        continue
-                    handle.write(json.dumps(item, ensure_ascii=False) + "\n")
-                    handle.flush()
+            prefix = default_batch_id() + "_" + uuid.uuid4().hex[:8]
+            segment, size = 0, 0
+            while not (self.closing.is_set() and self.queue.empty()):
+                try:
+                    item = self.queue.get(timeout=0.05)
+                except queue.Empty:
+                    continue
+                encoded = (json.dumps(item, ensure_ascii=False) + "\n").encode("utf-8")
+                if len(encoded) > self.segment_bytes:
+                    raise OSError("单条连接日志超过段上限，日志不完整")
+                if handle is None or size + len(encoded) > self.segment_bytes:
+                    if handle:
+                        handle.close(); handle = None
+                    if segment >= self.max_segments:
+                        raise OSError("本次连接日志容量已达上限；历史日志保留，请归档后重启")
+                    handle = (self.root / f"{prefix}_{segment:04d}.jsonl").open("xb")
+                    segment += 1; size = 0
+                handle.write(encoded); handle.flush(); size += len(encoded)
         except Exception as exc:
             self.error = f"设备日志写入失败: {exc}"
+        finally:
+            if handle:
+                handle.close()
 
     def close(self):
         self.closing.set()
@@ -198,8 +215,9 @@ class SessionLogger:
             return False
         return True
 
-    def start(self, batch_id, operator, mode, metadata=None):
+    def start(self, batch_id, operator, mode, metadata=None, camera_settings=None):
         metadata = normalize_metadata(metadata)
+        camera_settings = normalize_camera_settings(camera_settings)
         with self.lock:
             if self.active or not self.finished or self.pending_images:
                 raise RuntimeError("上一批次尚未结束")
@@ -231,6 +249,7 @@ class SessionLogger:
                         firmware_version=None, hardware_version=None, device_id=None, calibration_version=None,
                         label_scale_version=SCALE_VERSION)
             meta.update(metadata)
+            meta["camera_settings"] = camera_settings
             meta.update(metadata_schema=METADATA_VERSION, operator_metadata=copy.deepcopy(metadata),
                         operator_metadata_sha256=metadata_digest(metadata),
                         initial_mass_source="operator" if metadata["initial_mass_g"] is not None else None)
@@ -322,7 +341,8 @@ class SessionLogger:
                 return None
             self.pending_images += 1
             return dict(token=self.token, root=self.root, filename=f"images/IMG_{uuid.uuid4().hex}.jpg",
-                        batch_id=self.batch_id, event_nearby=event_id or "", source_mode=source_mode)
+                        batch_id=self.batch_id, event_nearby=event_id or "", source_mode=source_mode,
+                        camera_settings=copy.deepcopy(self.writer.meta.get("camera_settings")))
 
     def image_result(self, request, result):
         with self.lock:
