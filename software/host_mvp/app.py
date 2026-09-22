@@ -4,6 +4,7 @@ import argparse
 import csv
 import json
 import math
+import re
 import sys
 import time
 from collections import deque
@@ -16,6 +17,7 @@ import yaml
 from PySide6 import QtCore, QtWidgets
 import pyqtgraph as pg
 import serial
+from session_check import write_session_check
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -46,6 +48,8 @@ SENSOR_FIELDS = [
     "sample_valve_state",
     "purge_valve_state",
     "quality_flag",
+    "gas_enabled_mask",
+    "device_frame_json",
 ]
 
 EVENT_FIELDS = [
@@ -138,6 +142,9 @@ class SensorReader(QtCore.QThread):
                 except Exception as exc:
                     self.error.emit(f"JSON parse error: {exc}")
                     continue
+                if not isinstance(obj, dict):
+                    self.error.emit("JSON frame must be an object")
+                    continue
                 if obj.get("type") == "sensor":
                     self.sensor.emit(obj)
                 elif obj.get("type") == "status":
@@ -145,6 +152,8 @@ class SensorReader(QtCore.QThread):
         except Exception as exc:
             self.error.emit(str(exc))
         finally:
+            if self._serial and self._serial.is_open:
+                self._serial.close()
             self.status.emit("DISCONNECTED")
 
 
@@ -165,10 +174,15 @@ class SessionLogger:
         if self.active:
             raise RuntimeError("session already active")
         self.batch_id = batch_id.strip() or default_batch_id()
+        if (not re.fullmatch(r"[\w-]{1,80}", self.batch_id)
+                or self.batch_id.upper() in {"CON", "PRN", "AUX", "NUL", *[f"COM{i}" for i in range(1, 10)], *[f"LPT{i}" for i in range(1, 10)]}):
+            raise ValueError("批次编号只能包含字母、数字、下划线或短横线（1–80 字），不能使用系统保留名称")
         self.operator = operator.strip() or "unknown"
         self.root = DATA_ROOT / self.batch_id
+        self.root.mkdir(parents=True, exist_ok=False)
         images = self.root / "images"
-        images.mkdir(parents=True, exist_ok=False)
+        images.mkdir()
+        self.event_id = 0
 
         meta = {
             "batch_id": self.batch_id,
@@ -196,17 +210,29 @@ class SessionLogger:
             yaml.safe_dump(meta, allow_unicode=True, sort_keys=False), encoding="utf-8"
         )
 
-        self.sensor_file = (self.root / "sensor_1hz.csv").open("w", newline="", encoding="utf-8-sig")
-        self.events_file = (self.root / "events.csv").open("w", newline="", encoding="utf-8-sig")
-        self.sensor_writer = csv.DictWriter(self.sensor_file, fieldnames=SENSOR_FIELDS)
-        self.events_writer = csv.DictWriter(self.events_file, fieldnames=EVENT_FIELDS)
-        self.sensor_writer.writeheader()
-        self.events_writer.writeheader()
-        self.sensor_file.flush()
-        self.events_file.flush()
-        self.started_monotonic = time.monotonic()
-        self.active = True
-        self.event("SESSION_START", "", "session started")
+        self.sensor_file = None
+        self.events_file = None
+        try:
+            self.sensor_file = (self.root / "sensor_1hz.csv").open("w", newline="", encoding="utf-8-sig")
+            self.events_file = (self.root / "events.csv").open("w", newline="", encoding="utf-8-sig")
+            self.sensor_writer = csv.DictWriter(self.sensor_file, fieldnames=SENSOR_FIELDS)
+            self.events_writer = csv.DictWriter(self.events_file, fieldnames=EVENT_FIELDS)
+            self.sensor_writer.writeheader()
+            self.events_writer.writeheader()
+            self.sensor_file.flush()
+            self.events_file.flush()
+            self.started_monotonic = time.monotonic()
+            self.active = True
+            self.event("SESSION_START", "", "session started")
+        except Exception:
+            self.active = False
+            try:
+                if self.sensor_file:
+                    self.sensor_file.close()
+            finally:
+                if self.events_file:
+                    self.events_file.close()
+            raise
         return self.root
 
     def event(self, event_type: str, event_value: str = "", note: str = "") -> None:
@@ -239,15 +265,20 @@ class SessionLogger:
         stamp = datetime.now().astimezone().strftime("%Y%m%d_%H%M%S_%f")[:-3]
         return self.root / "images" / f"IMG_{stamp}.jpg"
 
-    def stop(self) -> None:
+    def stop(self) -> Path | None:
         if not self.active:
             return
-        self.event("SESSION_END", "", "session ended")
-        for f in (self.sensor_file, self.events_file):
-            if f:
-                f.flush()
-                f.close()
-        self.active = False
+        try:
+            self.event("SESSION_END", "", "session ended")
+        finally:
+            self.active = False
+            try:
+                if self.sensor_file:
+                    self.sensor_file.close()
+            finally:
+                if self.events_file:
+                    self.events_file.close()
+        return write_session_check(self.root)
 
 
 class MainWindow(QtWidgets.QMainWindow):
@@ -369,6 +400,8 @@ class MainWindow(QtWidgets.QMainWindow):
             self.reader.wait(1500)
             self.reader = None
             self.connect_btn.setText("连接")
+            self.port_edit.setEnabled(True)
+            self.sim_check.setEnabled(True)
             return
 
         port = self.port_edit.text().strip()
@@ -377,6 +410,10 @@ class MainWindow(QtWidgets.QMainWindow):
             QtWidgets.QMessageBox.warning(self, "串口", "请输入串口，例如 COM5")
             return
         self.reader = SensorReader(port, self.baud, simulate)
+        self.last_seq = None
+        self.last_frame_mono = time.monotonic()
+        self.port_edit.setEnabled(False)
+        self.sim_check.setEnabled(False)
         self.reader.sensor.connect(self.on_sensor)
         self.reader.status.connect(self.on_status)
         self.reader.error.connect(self.on_error)
@@ -386,6 +423,10 @@ class MainWindow(QtWidgets.QMainWindow):
     @QtCore.Slot(str)
     def on_status(self, text: str) -> None:
         self.conn_label.setText(text)
+        if text == "DISCONNECTED" and not self.logger.active:
+            self.port_edit.setEnabled(True)
+            self.sim_check.setEnabled(True)
+            self.connect_btn.setText("连接")
         self.append_log(text)
 
     @QtCore.Slot(str)
@@ -395,21 +436,38 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def start_session(self) -> None:
         try:
-            mode = "simulate" if self.sim_check.isChecked() else "serial"
+            if not self.reader or not self.reader.isRunning():
+                raise RuntimeError("请先连接设备或启动模拟数据")
+            mode = "simulate" if self.reader.simulate else "serial"
             root = self.logger.start(self.batch_edit.text(), self.operator_edit.text(), mode)
         except Exception as exc:
             QtWidgets.QMessageBox.critical(self, "开始失败", str(exc))
             return
         self.start_btn.setEnabled(False)
         self.stop_btn.setEnabled(True)
+        self.connect_btn.setEnabled(False)
+        self.batch_edit.setEnabled(False)
+        self.operator_edit.setEnabled(False)
         self.m0 = None
         self.last_seq = None
         self.append_log(f"session started: {root}")
 
     def stop_session(self) -> None:
-        self.logger.stop()
+        try:
+            report = self.logger.stop()
+            if report:
+                self.append_log(f"完整性报告: {report}")
+        except Exception as exc:
+            self.on_error(f"结束批次或生成报告失败: {exc}")
         self.start_btn.setEnabled(True)
         self.stop_btn.setEnabled(False)
+        self.connect_btn.setEnabled(True)
+        self.batch_edit.setEnabled(True)
+        self.operator_edit.setEnabled(True)
+        self.batch_edit.setText(default_batch_id())
+        if not self.reader or not self.reader.isRunning():
+            self.port_edit.setEnabled(True)
+            self.sim_check.setEnabled(True)
         self.append_log("session ended")
 
     def mark_event(self, event_type: str) -> None:
@@ -441,11 +499,17 @@ class MainWindow(QtWidgets.QMainWindow):
     @QtCore.Slot(dict)
     def on_sensor(self, frame: dict[str, Any]) -> None:
         recv_mono = time.monotonic()
+        seq = frame.get("seq")
+        if (not isinstance(seq, int) or isinstance(seq, bool) or seq < 0
+                or not isinstance(frame.get("gas_adc"), list)
+                or not isinstance(frame.get("gas_v"), list)):
+            self.on_error("无效传感器帧：seq 或气敏数组格式错误")
+            return
         self.last_frame_mono = recv_mono
-        seq = int(frame.get("seq", -1))
-        quality = "OK"
+        device_quality = frame.get("quality_flag", "OK")
+        quality = device_quality if isinstance(device_quality, str) and device_quality else "SENSOR_ERROR"
         if self.last_seq is not None and seq != self.last_seq + 1:
-            quality = "SERIAL_GAP"
+            quality = "SERIAL_GAP" if quality == "OK" else f"{quality};SERIAL_GAP"
             self.append_log(f"seq gap: {self.last_seq} -> {seq}")
         self.last_seq = seq
 
@@ -455,7 +519,8 @@ class MainWindow(QtWidgets.QMainWindow):
         gas_v = (gas_v + [None] * 4)[:4]
 
         mass = frame.get("mass_g")
-        if self.logger.active and self.m0 is None and isinstance(mass, (int, float)):
+        if (self.logger.active and self.m0 is None and isinstance(mass, (int, float))
+                and not isinstance(mass, bool) and math.isfinite(mass) and mass > 0):
             self.m0 = float(mass)
             self.logger.event("T0_INITIAL", f"mass_g={self.m0:.3f}", "automatic first valid mass")
 
@@ -484,8 +549,15 @@ class MainWindow(QtWidgets.QMainWindow):
             "sample_valve_state": frame.get("valve_sample", ""),
             "purge_valve_state": frame.get("valve_purge", ""),
             "quality_flag": quality,
+            "gas_enabled_mask": frame.get("gas_enabled_mask", 15),
+            "device_frame_json": json.dumps(frame, ensure_ascii=False, separators=(",", ":")),
         }
-        self.logger.write_sensor(row)
+        try:
+            self.logger.write_sensor(row)
+        except OSError as exc:
+            self.on_error(f"数据写入失败: {exc}")
+            self.stop_session()
+            return
 
         self.seq_label.setText(f"seq: {seq}")
         if isinstance(mass, (int, float)):
@@ -519,7 +591,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.conn_label.setText(f"数据超时 {age:.1f}s")
 
     def closeEvent(self, event) -> None:  # noqa: N802
-        self.logger.stop()
+        self.stop_session()
         if self.reader:
             self.reader.stop()
             self.reader.wait(1000)

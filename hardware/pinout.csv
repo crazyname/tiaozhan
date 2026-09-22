@@ -1,0 +1,13 @@
+signal,gpio,header,direction,logic,default,connection
+I2C_SDA,8,J1-12,bidirectional,3.3V open-drain,pull-up,I2C modules SDA
+I2C_SCL,9,J1-15,output,3.3V open-drain,pull-up,I2C modules SCL
+HX711_DOUT,4,J1-4,input,3.3V,pull-up,HX711 DOUT
+HX711_SCK,5,J1-5,output,3.3V,LOW,HX711 SCK
+AIR_ENABLE_N,6,J1-6,input,3.3V active-low,pull-up,enable switch to GND
+PUMP_EN,16,J1-9,output,3.3V active-high,LOW,pump MOSFET gate driver
+SAMPLE_VALVE_EN,17,J1-10,output,3.3V active-high,LOW,sample NC valve MOSFET gate driver
+PURGE_VALVE_EN,18,J1-11,output,3.3V active-high,LOW,purge NC valve MOSFET gate driver
+USB_D_MINUS,19,J3-20,USB,USB,reserved,on-board native USB
+USB_D_PLUS,20,J3-19,USB,USB,reserved,on-board native USB
+UART0_TX,43,J3-2,output,3.3V,reserved,on-board USB UART bridge
+UART0_RX,44,J3-3,input,3.3V,reserved,on-board USB UART bridge
