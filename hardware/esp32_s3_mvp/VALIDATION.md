@@ -1,15 +1,17 @@
 # 固件验证记录
 
-## Wokwi 全系统功能仿真代码补齐（2026-09-22，待本机复验）
+## Wokwi 全系统功能仿真（2026-09-22，构建 PASS，运行待验收）
 
 - 已新增独立 `esp32s3_wokwi` 构建环境，启用 `QY_WOKWI_SIM`、气路与电机功能；原 `esp32s3`、`esp32s3_air`、`esp32s3_motor` 不启用仿真宏，继续走真实硬件驱动。
 - 已增加 `diagram.json` / `wokwi.toml`：目标板按 ESP32-S3 DevKitC-1、8MB Flash、8MB octal PSRAM、USB Serial/JTAG 配置；保留 Wokwi 原生 HX711，并加入气路/电机安全开关与泵阀/电机输出 LED。
 - HX711 在仿真环境仍走真实 GPIO 位时序，不使用软件假值；ADS1115、双 SHT31、MLX90614、BME688 在 `QY_WOKWI_SIM` 下由确定性的做青过程功能模型提供输入，避免为缺少官方器件模型而污染真实驱动代码。
 - 电机仍运行现有 `MotorPolicy` 控制与故障逻辑，但反馈来自一阶数学被控对象；该模型用于验证闭环软件、心跳、互锁和状态上报，不代表真实电机/减速器动力学。
 - 仿真输出明确使用 `hardware=QY-WOKWI-SIM`、`source_mode=simulation`，避免把仿真数据混同为实物数据；仿真预热标志缩短为5秒，真实构建仍为20分钟工程标记。
-- 已增加 `wokwi_full_demo.yaml`，覆盖 `info`、HX711去皮/1kg标定/0.5kg验证、3秒采样气路、15rpm/3秒电机命令和主机心跳；Automation Scenario 本身尚未在本机 Wokwi CLI 中执行。
+- 已增加 `wokwi_full_demo.yaml`，覆盖 `info`、HX711去皮/1kg标定/0.5kg验证、3秒采样气路、15rpm/3秒电机命令和主机心跳；Automation Scenario 本身尚未在本机 Wokwi 中执行。
 - `wokwi.toml` 开启 RFC2217 端口4000，为后续 PySide6 上位机直接连接虚拟 ESP32-S3 预留链路。
-- **当前状态：代码与配置已提交，但新增 `esp32s3_wokwi` 环境尚未在用户本机同步后重新编译、启动和自动场景验收，因此本节不记 PASS。** 运行方法与仿真边界见 [WOKWI.md](WOKWI.md)。
+- 用户本机已在同步最新 `main` 后执行 `pio run -d hardware/esp32_s3_mvp -e esp32s3_wokwi`，**构建成功**：13.826 秒，静态 RAM 24028 / 327680 字节（7.3%），应用 Flash 320841 / 3342336 字节（9.6%）。编译、链接及 `firmware.bin` 生成均成功。
+- PlatformIO 构建摘要仍将基础板描述为 `ESP32-S3-DevKitC-1-N8 (8 MB QD, No PSRAM)`；本项目另外通过 `qio_opi`、`BOARD_HAS_PSRAM` 与 Wokwi `diagram.json` 的 8MB octal PSRAM 属性表达目标 N8R8 配置。因此“构建 PASS”不能单独证明 Wokwi 运行时已经正确初始化 PSRAM，仍需检查启动日志中是否还出现 `PSRAM ID read error`。
+- **当前状态：`esp32s3_wokwi` 已记构建 PASS；下一验收门槛是启动 Wokwi 并确认启动身份、传感帧、HX711、气路、电机、安全开关和自动场景。** 运行方法与仿真边界见 [WOKWI.md](WOKWI.md)。
 
 ## Wokwi 空板仿真记录（2026-09-22，历史基线）
 
