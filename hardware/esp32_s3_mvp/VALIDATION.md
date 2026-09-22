@@ -1,16 +1,27 @@
 # 固件验证记录
 
-## Wokwi 空板仿真记录（2026-09-22）
+## Wokwi 全系统功能仿真代码补齐（2026-09-22，待本机复验）
+
+- 已新增独立 `esp32s3_wokwi` 构建环境，启用 `QY_WOKWI_SIM`、气路与电机功能；原 `esp32s3`、`esp32s3_air`、`esp32s3_motor` 不启用仿真宏，继续走真实硬件驱动。
+- 已增加 `diagram.json` / `wokwi.toml`：目标板按 ESP32-S3 DevKitC-1、8MB Flash、8MB octal PSRAM、USB Serial/JTAG 配置；保留 Wokwi 原生 HX711，并加入气路/电机安全开关与泵阀/电机输出 LED。
+- HX711 在仿真环境仍走真实 GPIO 位时序，不使用软件假值；ADS1115、双 SHT31、MLX90614、BME688 在 `QY_WOKWI_SIM` 下由确定性的做青过程功能模型提供输入，避免为缺少官方器件模型而污染真实驱动代码。
+- 电机仍运行现有 `MotorPolicy` 控制与故障逻辑，但反馈来自一阶数学被控对象；该模型用于验证闭环软件、心跳、互锁和状态上报，不代表真实电机/减速器动力学。
+- 仿真输出明确使用 `hardware=QY-WOKWI-SIM`、`source_mode=simulation`，避免把仿真数据混同为实物数据；仿真预热标志缩短为5秒，真实构建仍为20分钟工程标记。
+- 已增加 `wokwi_full_demo.yaml`，覆盖 `info`、HX711去皮/1kg标定/0.5kg验证、3秒采样气路、15rpm/3秒电机命令和主机心跳；Automation Scenario 本身尚未在本机 Wokwi CLI 中执行。
+- `wokwi.toml` 开启 RFC2217 端口4000，为后续 PySide6 上位机直接连接虚拟 ESP32-S3 预留链路。
+- **当前状态：代码与配置已提交，但新增 `esp32s3_wokwi` 环境尚未在用户本机同步后重新编译、启动和自动场景验收，因此本节不记 PASS。** 运行方法与仿真边界见 [WOKWI.md](WOKWI.md)。
+
+## Wokwi 空板仿真记录（2026-09-22，历史基线）
 
 - 本机 VS Code + PlatformIO 已能正常打开 `hardware/esp32_s3_mvp`，`esp32s3` 环境再次编译成功（7.485 秒）。
 - 使用 Wokwi `board-esp32-s3-devkitc-1` 加载 `.pio/build/esp32s3/firmware.bin` 与 `.elf`，ESP32-S3 能正常启动并持续运行。
 - `diagram.json` 使用 `serialInterface = USB_SERIAL_JTAG` 后，Wokwi Terminal 能收到固件的原生 USB CDC 输出；已看到启动状态 JSON 及约 1 Hz 的 `sensor` JSON 帧。
-- 当前仿真仅放置 ESP32-S3，本轮未添加 ADS1115、SHT31、MLX90614、BME688、HX711，因此 I²C `Error -1`、对应字段为 `null`、`SENSOR_ERROR` 与 `HX711_NO_FRESH_DATA` 均属预期，不代表实物故障。
-- Wokwi 启动时出现 `PSRAM ID read error`。当前工程按 ESP32-S3-DevKitC-1 N8R8 配置为 `qio_opi` 并启用 `BOARD_HAS_PSRAM`；Wokwi 当前空板仿真未复现目标 N8R8 的 OPI PSRAM。该警告不用于判断实物 PSRAM 是否正常，仍需上板验证。
+- 该轮最初只放置 ESP32-S3，ADS1115、SHT31、MLX90614、BME688、HX711 均未添加，因此 I²C `Error -1`、对应字段为 `null`、`SENSOR_ERROR` 与 `HX711_NO_FRESH_DATA` 属预期；随后加入 Wokwi 原生 HX711 后，已观察到 `hx_samples=10` 且 `HX711_NO_FRESH_DATA` 消失。
+- 空板阶段 Wokwi 出现 `PSRAM ID read error`，原因是当时图中未配置目标 N8R8 的8MB octal PSRAM；新的全系统 `diagram.json` 已补上对应板属性，仍待本机复验启动日志。
 - 首次仿真出现 NVS `record NOT_FOUND`，表示尚无称重标定记录，符合首次启动预期。
-- Wokwi Terminal 输出刷新较快，未完成从 Terminal 手工输入 `{"cmd":"info"}` 的反向命令链路验证；该项不作为当前继续开发的阻塞条件，后续可通过上位机或虚拟串口单独验证。
-- 已发现一个不影响功能的版本提示不一致：启动状态字符串仍写死为 `QY-FW-0.3.0 hardware acquisition ready`，而 `cfg::Firmware` 及传感帧已经是 `QY-FW-0.4.0`。记录为文档 TODO，后续统一为配置常量，避免再次手工漏改。
-- 本节只证明“现有 PlatformIO 固件可在 Wokwi 启动并输出协议帧”；不证明真实传感器、PSRAM、NVS 持久化、USB 枚举、泵阀、电机、安全链或长期稳定性通过。
+- Wokwi Terminal 输出刷新较快，未完成从 Terminal 手工输入 `{"cmd":"info"}` 的反向命令链路验证；新的 `wokwi.toml` 已增加 RFC2217，后续优先通过上位机或自动场景验证，不再依赖手工抢终端输入。
+- 空板阶段启动字符串仍残留 `QY-FW-0.3.0`，而传感帧为 `QY-FW-0.4.0`；全系统代码已改为统一配置常量，并区分 hardware / simulation 身份，待重新编译确认。
+- 本节只证明当时“PlatformIO 固件可在 Wokwi 启动、USB CDC 输出正常、原生 HX711可读取”；不证明全系统新仿真环境或任何实物硬件已经验收通过。
 
 ## FW-v0.4.0 启动自检支持（2026-09-22）
 
