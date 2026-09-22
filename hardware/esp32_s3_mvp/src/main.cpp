@@ -5,6 +5,7 @@
 #include "config.h"
 #include "core.h"
 #include "sensors.h"
+#include "motor.h"
 
 namespace {
 Preferences preferences;
@@ -99,6 +100,7 @@ void pollHx() {
     status(saved ? "calibration saved in NVS" : "calibration rejected or NVS write failed; previous value retained", saved);
 }
 void startCalibration(CalMode mode, double grams = 0) {
+    if (motorSnapshot().running) { status("calibration rejected: motor active", false); return; }
     if (calMode != CalMode::None) { status("calibration already running", false); return; }
     if (!storageReady) { status("NVS unavailable", false); return; }
     if (mode == CalMode::Reference && (!offsetKnown || !isfinite(grams) || grams <= 0 || grams > 20000)) {
@@ -114,17 +116,36 @@ void command(const char *line) {
         status("invalid JSON command", false); return;
     }
     const char *cmd = input["cmd"];
+    if (!strcmp(cmd, "motor_heartbeat")) {
+        if (input["session_id"].is<const char*>()) motorLease(input["session_id"]);
+        return; // No command response; this is a lease renewal, never a start command.
+    }
+    if (!strcmp(cmd, "motor") || !strcmp(cmd, "motor_stop") || !strcmp(cmd, "motor_reset")) {
+        StaticJsonDocument<384> out;
+        out["type"] = "status"; out["cmd"] = cmd; out["request_id"] = input["request_id"];
+        bool accepted = false;
+        if (!strcmp(cmd, "motor_stop")) { motorStop(); accepted = motorReady(); }
+        else if (!strcmp(cmd, "motor_reset")) accepted = motorReset();
+        else if (calMode == CalMode::None && input["rpm"].is<float>() && input["direction"].is<int>() &&
+                 input["duration_ms"].is<uint32_t>() && input["session_id"].is<const char*>()) {
+            accepted = motorStart(input["rpm"].as<float>(), input["direction"].as<int>(), input["duration_ms"].as<uint32_t>(), input["session_id"]);
+        }
+        out["ok"] = accepted;
+        out["message"] = accepted ? "motor command accepted; inspect encoder telemetry" : "motor rejected: build, interlock, stationary, fault, calibration or range";
+        emitJson(out); return;
+    }
     if (!strcmp(cmd, "stop")) { stopAir(); status("air stopped"); }
     else if (!strcmp(cmd, "tare")) startCalibration(CalMode::Tare);
     else if (!strcmp(cmd, "calibrate")) {
         if (!input["grams"].is<double>()) { status("grams must be numeric", false); return; }
         startCalibration(CalMode::Reference, input["grams"].as<double>());
     } else if (!strcmp(cmd, "info")) {
-        StaticJsonDocument<512> out;
+        StaticJsonDocument<768> out;
         out["type"] = "status"; out["message"] = "firmware configuration";
         out["firmware"] = cfg::Firmware; out["hardware"] = cfg::Hardware;
         out["source_mode"] = "hardware"; out["air_compiled"] = cfg::AirCompiled;
         out["air_enable"] = digitalRead(cfg::AirEnable) == LOW;
+        out["motor_compiled"] = motorReady(); out["motor_interlock"] = motorInterlocked();
         out["offset_known"] = offsetKnown;
         out["hx_offset"] = calibration.offset; out["hx_counts_per_g"] = calibration.scale;
         emitJson(out);
@@ -172,7 +193,7 @@ void publish() {
     out["type"] = "sensor"; out["seq"] = sequence++;
     out["t_ms"] = static_cast<uint64_t>(esp_timer_get_time() / 1000);
     out["firmware"] = cfg::Firmware; out["hardware"] = cfg::Hardware;
-    out["protocol"] = "JSONL-v0.2"; out["source_mode"] = "hardware";
+    out["protocol"] = "JSONL-v0.3"; out["source_mode"] = "hardware";
     const String deviceId = String(static_cast<uint32_t>(ESP.getEfuseMac() >> 32), HEX) + String(static_cast<uint32_t>(ESP.getEfuseMac()), HEX);
     out["device_id"] = deviceId;
     auto errors = out.createNestedArray("errors");
@@ -222,6 +243,17 @@ void publish() {
     portEXIT_CRITICAL(&airMux);
     out["pump"] = outputs.pump ? 1 : 0; out["valve_sample"] = outputs.sample ? 1 : 0; out["valve_purge"] = outputs.purge ? 1 : 0;
     out["actuator_state_kind"] = "commanded_not_feedback";
+    const auto motor = motorSnapshot();
+    out["motor_compiled"] = motorReady(); out["motor_interlock"] = motorInterlocked();
+    out["motor_running"] = motor.running; out["motor_fault"] = motor.fault;
+    out["shake_target_rpm"] = motor.target;
+    number(out["shake_actual_rpm"], motorReady() && motor.feedbackValid ? motor.actual : NAN);
+    out["shake_direction"] = motor.direction;
+    out["shake_start_time"] = motor.started; out["shake_end_time"] = motor.ended;
+    out["shake_time_kind"] = "mcu_uptime_ms";
+    out["shake_duration_s"] = motor.duration/1000.0f;
+    out["motor_pwm_duty"] = motor.duty;
+    out["motor_current_a"] = nullptr; // CS is PWM-dependent and has not been calibrated.
     String quality;
     auto addFlag = [&](const char *flag) { if (quality.length()) quality += ';'; quality += flag; };
     if (errors.size()) addFlag("SENSOR_ERROR");
@@ -236,6 +268,7 @@ void publish() {
 }
 
 void setup() {
+    motorBegin();
     for (int pin : {cfg::Pump, cfg::SampleValve, cfg::PurgeValve, cfg::HxClock}) {
         digitalWrite(pin, LOW); pinMode(pin, OUTPUT);
     }
@@ -254,12 +287,13 @@ void setup() {
             calibration = saved; offsetKnown = true;
         }
     }
-    status("QY-FW-0.2.0 hardware acquisition ready; outputs initially OFF");
+    status("QY-FW-0.3.0 hardware acquisition ready; outputs initially OFF");
     if (!airTaskReady) status("air safety task unavailable; air commands disabled", false);
     if (!storageReady) status("NVS unavailable; calibration disabled", false);
 }
 
 void loop() {
+    motorMainAlive();
     portENTER_CRITICAL(&airMux); mainHeartbeat = millis(); portEXIT_CRITICAL(&airMux);
     pollCommands(); pollHx();
     static uint32_t lastFrame = millis();

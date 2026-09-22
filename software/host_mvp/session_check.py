@@ -52,6 +52,18 @@ def audit_session(root: Path) -> str:
                     issues[f"传感器列缺失: {name}"] += 1
             for row in reader:
                 samples += 1
+                if row.get("motor_compiled") in ("True", "true", "1"):
+                    for key in ("shake_target_rpm", "shake_actual_rpm", "shake_direction", "shake_duration_s", "shake_start_time", "shake_end_time"):
+                        try:
+                            value = float(row.get(key) or "")
+                            if not math.isfinite(value):
+                                raise ValueError
+                            if (key == "shake_actual_rpm" and abs(value) > 45) or (key == "shake_direction" and value not in (-1, 1)) or (key == "shake_target_rpm" and not 0 <= value <= 30):
+                                issues[f"滚筒范围异常: {key}"] += 1
+                        except (ValueError, TypeError):
+                            issues[f"滚筒遥测缺失/无效: {key}"] += 1
+                    if row.get("motor_fault") not in ("NONE", ""):
+                        issues["滚筒故障记录"] += 1
                 # Legacy batches lack a mask and require all four channels.
                 try:
                     mask = int(row.get("gas_enabled_mask", "15"))

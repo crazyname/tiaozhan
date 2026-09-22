@@ -1,5 +1,12 @@
 # FW-v0.2.0 验证记录
 
+## FW-v0.3.0 / DRUM-v0.1 软件验证（2026-09-22）
+
+- PlatformIO 6.2.0，固定Espressif32 6.9.0 / Arduino-ESP32 2.0.17，`pio run -d hardware/esp32_s3_mvp -e esp32s3 -e esp32s3_air -e esp32s3_motor`三种配置全部成功，总计52.583秒；motor版静态RAM24856字节、应用332825字节（编译器统计）。
+- WinLibs GCC16.1.0，`test/run_core_tests.ps1`运行原core_test与新增motor_test均通过。新增验证参数拒绝、正/反转计数、缓升/占空比限幅、定时结束、必须停稳才能重启、互锁/驱动/MCU/主机/超速/反向/无运动/无效反馈停止、故障锁存与人工复位。
+- 上位机51项测试通过，包含motor请求ID、心跳故障模拟和批次收尾联动。
+- 未烧录、未接电机/编码器/PNOZ，未测试电气安全链、实际控制周期、停止延迟、PI稳定性、负载、电流或长期运行。按[DRUM-v0.1](../MOTOR_BASELINE.md)执行实物验收后另填记录；以下v0.2记录保留为历史。
+
 日期：2026-09-22。环境：Windows、本地PlatformIO 6.x、Espressif32平台6.9.0、Arduino-ESP32框架2.0.17；上位机使用项目已有Python虚拟环境。
 
 ## 已执行
