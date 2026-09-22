@@ -1,5 +1,17 @@
 # 固件验证记录
 
+## Wokwi 空板仿真记录（2026-09-22）
+
+- 本机 VS Code + PlatformIO 已能正常打开 `hardware/esp32_s3_mvp`，`esp32s3` 环境再次编译成功（7.485 秒）。
+- 使用 Wokwi `board-esp32-s3-devkitc-1` 加载 `.pio/build/esp32s3/firmware.bin` 与 `.elf`，ESP32-S3 能正常启动并持续运行。
+- `diagram.json` 使用 `serialInterface = USB_SERIAL_JTAG` 后，Wokwi Terminal 能收到固件的原生 USB CDC 输出；已看到启动状态 JSON 及约 1 Hz 的 `sensor` JSON 帧。
+- 当前仿真仅放置 ESP32-S3，本轮未添加 ADS1115、SHT31、MLX90614、BME688、HX711，因此 I²C `Error -1`、对应字段为 `null`、`SENSOR_ERROR` 与 `HX711_NO_FRESH_DATA` 均属预期，不代表实物故障。
+- Wokwi 启动时出现 `PSRAM ID read error`。当前工程按 ESP32-S3-DevKitC-1 N8R8 配置为 `qio_opi` 并启用 `BOARD_HAS_PSRAM`；Wokwi 当前空板仿真未复现目标 N8R8 的 OPI PSRAM。该警告不用于判断实物 PSRAM 是否正常，仍需上板验证。
+- 首次仿真出现 NVS `record NOT_FOUND`，表示尚无称重标定记录，符合首次启动预期。
+- Wokwi Terminal 输出刷新较快，未完成从 Terminal 手工输入 `{"cmd":"info"}` 的反向命令链路验证；该项不作为当前继续开发的阻塞条件，后续可通过上位机或虚拟串口单独验证。
+- 已发现一个不影响功能的版本提示不一致：启动状态字符串仍写死为 `QY-FW-0.3.0 hardware acquisition ready`，而 `cfg::Firmware` 及传感帧已经是 `QY-FW-0.4.0`。记录为文档 TODO，后续统一为配置常量，避免再次手工漏改。
+- 本节只证明“现有 PlatformIO 固件可在 Wokwi 启动并输出协议帧”；不证明真实传感器、PSRAM、NVS 持久化、USB 枚举、泵阀、电机、安全链或长期稳定性通过。
+
 ## FW-v0.4.0 启动自检支持（2026-09-22）
 
 - `info`新增完整身份、启用掩码及指定I²C地址应答，容量增至1536字节并检查溢出；不调用原scan的气路停止逻辑。
