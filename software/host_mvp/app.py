@@ -10,7 +10,7 @@ import pyqtgraph as pg
 from camera import CameraWorker
 from device import SensorReader
 from labels import SCALE_VERSION, STAGES, ACTIONS, SCORES
-from schema import SENSOR_FIELDS, EVENT_FIELDS, now_iso, default_batch_id, finite_number
+from schema import HOST_VERSION, SENSOR_FIELDS, EVENT_FIELDS, now_iso, default_batch_id, finite_number
 from storage import SessionLogger as BaseSessionLogger
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -54,7 +54,7 @@ class LabelDialog(QtWidgets.QDialog):
 class MainWindow(QtWidgets.QMainWindow):
     def __init__(self, default_port: str, baud: int, simulate: bool):
         super().__init__()
-        self.setWindowTitle("青韵智控 Host MVP v0.1")
+        self.setWindowTitle(f"青韵智控 {HOST_VERSION}")
         self.resize(1280, 820)
 
         self.baud = baud
