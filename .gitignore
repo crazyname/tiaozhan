@@ -13,6 +13,7 @@ Thumbs.db
 
 # Local experiment data: raw data should be backed up separately before any curated upload
 data/raw/*
+data/device_logs/
 !data/raw/.gitkeep
 
 # Generated logs / caches

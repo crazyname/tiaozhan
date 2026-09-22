@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import json
 import math
 import shutil
 from collections import Counter
@@ -13,6 +14,16 @@ from pathlib import Path
 def audit_session(root: Path) -> str:
     root = Path(root)
     issues: Counter[str] = Counter()
+    if (root / "INCOMPLETE").exists():
+        issues["批次未完成或写盘失败（INCOMPLETE）"] += 1
+    summary_path = root / "writer_summary.json"
+    if summary_path.exists():
+        try:
+            summary = json.loads(summary_path.read_text(encoding="utf-8"))
+            if summary.get("error") or summary.get("unwritten") or summary.get("rejected"):
+                issues["后台写盘存在错误、拒收或未保存记录"] += 1
+        except (OSError, ValueError, AttributeError):
+            issues["写盘汇总无法解析"] += 1
     samples = 0
     flags: Counter[str] = Counter()
     previous: dict[str, float] = {}
@@ -82,10 +93,12 @@ def audit_session(root: Path) -> str:
     if samples == 0:
         issues["没有传感器数据"] += 1
     event_types = []
+    event_ids = set()
     try:
         with (root / "events.csv").open(encoding="utf-8-sig", newline="") as handle:
             for row in csv.DictReader(handle):
                 event_types.append(row.get("event_type"))
+                event_ids.add(row.get("event_id"))
                 if row.get("batch_id") != root.name:
                     issues["事件批次编号不匹配"] += 1
         if (event_types.count("SESSION_START") != 1 or event_types.count("SESSION_END") != 1
@@ -94,6 +107,45 @@ def audit_session(root: Path) -> str:
     except (OSError, UnicodeError, csv.Error) as exc:
         issues[f"事件文件读取失败: {exc}"] += 1
     images = sum(1 for p in (root / "images").glob("*.jpg") if p.is_file())
+    index_path = root / "image_index.csv"
+    if index_path.exists():
+        indexed = set()
+        try:
+            with index_path.open(encoding="utf-8-sig", newline="") as handle:
+                for row in csv.DictReader(handle):
+                    name = row.get("filename", "")
+                    path = (root / name).resolve()
+                    if not path.is_relative_to((root / "images").resolve()) or not path.is_file():
+                        issues["图片索引路径无效或文件缺失"] += 1
+                    if name in indexed:
+                        issues["图片索引重复"] += 1
+                    indexed.add(name)
+                    if row.get("batch_id") != root.name:
+                        issues["图片批次编号不匹配"] += 1
+                    if row.get("event_nearby") and row["event_nearby"] not in event_ids:
+                        issues["图片关联事件不存在"] += 1
+            actual = {p.relative_to(root).as_posix() for p in (root / "images").glob("*.jpg")}
+            if actual != indexed:
+                issues["图片文件与索引不一致"] += 1
+        except (OSError, UnicodeError, csv.Error):
+            issues["图片索引读取失败"] += 1
+    labels_path = root / "master_labels.csv"
+    if labels_path.exists():
+        seen = {}
+        try:
+            with labels_path.open(encoding="utf-8-sig", newline="") as handle:
+                for row in csv.DictReader(handle):
+                    if row.get("batch_id") != root.name or row.get("event_id") not in event_ids:
+                        issues["标签批次或事件关联无效"] += 1
+                    old = seen.get(row.get("supersedes"))
+                    revision = int(row.get("revision", "0"))
+                    if (row.get("supersedes") and (not old or revision != int(old["revision"])+1 or row.get("event_id") != old.get("event_id"))) or (not row.get("supersedes") and revision != 1):
+                        issues["标签修订链无效"] += 1
+                    if not row.get("label_id") or row["label_id"] in seen:
+                        issues["标签编号无效或重复"] += 1
+                    seen[row.get("label_id")] = row
+        except (OSError, UnicodeError, csv.Error, ValueError, TypeError):
+            issues["标签文件读取失败"] += 1
     try:
         free_mb = shutil.disk_usage(root).free / 1024**2
         disk = f"{free_mb:.1f} MB（检查时）"
@@ -110,7 +162,7 @@ def audit_session(root: Path) -> str:
              f"质量标记统计: {dict(flags)}", "", "异常计数:"]
     lines += [f"- {key}: {count}" for key, count in sorted(issues.items())] or ["- 无"]
     lines += ["", "边界：基础检查通过不代表数据具有科研有效性。",
-              "温度、电压、ADC 的器件专用量程尚未配置；图片为数量统计，未验证内容。",
+              "温度、电压、ADC 的器件专用量程尚未配置；图片检查文件与索引，未验证内容。",
               "本报告不修改原始数据；模拟数据不得用于实验结论。"]
     return "\n".join(lines) + "\n"
 

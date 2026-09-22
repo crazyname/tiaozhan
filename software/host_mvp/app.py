@@ -1,285 +1,55 @@
 from __future__ import annotations
-
 import argparse
-import csv
-import json
-import math
-import re
 import sys
 import time
 from collections import deque
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
-from typing import Any
-
-import cv2
-import yaml
-from PySide6 import QtCore, QtWidgets
+from PySide6 import QtCore, QtGui, QtWidgets
 import pyqtgraph as pg
-import serial
-from session_check import write_session_check
-
+from camera import CameraWorker
+from device import SensorReader
+from labels import SCALE_VERSION, STAGES, ACTIONS, SCORES
+from schema import SENSOR_FIELDS, EVENT_FIELDS, now_iso, default_batch_id, finite_number
+from storage import SessionLogger as BaseSessionLogger
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DATA_ROOT = REPO_ROOT / "data" / "raw"
 
-SENSOR_FIELDS = [
-    "batch_id",
-    "seq",
-    "datetime_iso",
-    "host_monotonic_s",
-    "mcu_t_ms",
-    "gas_1_adc",
-    "gas_2_adc",
-    "gas_3_adc",
-    "gas_4_adc",
-    "gas_1_v",
-    "gas_2_v",
-    "gas_3_v",
-    "gas_4_v",
-    "bme688_gas_ohm",
-    "chamber_temp_c",
-    "chamber_rh_pct",
-    "ambient_temp_c",
-    "ambient_rh_pct",
-    "leaf_temp_c",
-    "mass_g",
-    "pump_state",
-    "sample_valve_state",
-    "purge_valve_state",
-    "quality_flag",
-    "gas_enabled_mask",
-    "device_frame_json",
-]
+class SessionLogger(BaseSessionLogger):
+    def __init__(self):
+        super().__init__(DATA_ROOT)
 
-EVENT_FIELDS = [
-    "event_id",
-    "batch_id",
-    "host_time_iso",
-    "host_monotonic_s",
-    "event_type",
-    "event_value",
-    "operator",
-    "note",
-]
-
-
-def now_iso() -> str:
-    return datetime.now(timezone.utc).astimezone().isoformat(timespec="milliseconds")
-
-
-def default_batch_id() -> str:
-    return datetime.now().astimezone().strftime("BATCH_%Y%m%d_%H%M%S")
-
-
-class SensorReader(QtCore.QThread):
-    sensor = QtCore.Signal(dict)
-    status = QtCore.Signal(str)
-    error = QtCore.Signal(str)
-
-    def __init__(self, port: str, baud: int, simulate: bool = False):
-        super().__init__()
-        self.port = port
-        self.baud = baud
-        self.simulate = simulate
-        self._running = True
-        self._serial: serial.Serial | None = None
-
-    def stop(self) -> None:
-        self._running = False
-        try:
-            if self._serial and self._serial.is_open:
-                self._serial.close()
-        except Exception:
-            pass
-
-    def _mock_frame(self, seq: int) -> dict[str, Any]:
-        t = time.monotonic()
-        gas_adc = [
-            int(15100 + 700 * math.sin(t / 15.0)),
-            int(18800 + 950 * math.sin(t / 20.0 + 0.6)),
-            int(13900 + 520 * math.sin(t / 12.5 + 1.2)),
-            int(22000 + 1100 * math.sin(t / 25.0 + 1.8)),
-        ]
-        gas_v = [x * 4.096 / 32767.0 for x in gas_adc]
-        return {
-            "type": "sensor",
-            "seq": seq,
-            "t_ms": int(t * 1000),
-            "gas_adc": gas_adc,
-            "gas_v": gas_v,
-            "bme688_gas_ohm": int(183000 + 12000 * math.sin(t / 18.0)),
-            "chamber_t_c": 27.2 + 0.3 * math.sin(t / 30.0),
-            "chamber_rh_pct": 71.0 + 2.0 * math.sin(t / 22.0),
-            "ambient_t_c": 26.8 + 0.2 * math.sin(t / 40.0),
-            "ambient_rh_pct": 69.0 + 1.2 * math.sin(t / 32.0),
-            "leaf_t_c": 26.5 + 0.2 * math.sin(t / 27.0),
-            "mass_g": 4000.0 - seq * 0.012,
-            "pump": 1,
-            "valve_sample": 1,
-            "valve_purge": 0,
+class LabelDialog(QtWidgets.QDialog):
+    def __init__(self, parent, previous=None):
+        super().__init__(parent)
+        self.setWindowTitle("师傅观察记录（草案量表）")
+        form = QtWidgets.QFormLayout(self)
+        form.addRow(QtWidgets.QLabel(f"{SCALE_VERSION}；未判断请留空，评分不是成熟度概率。"))
+        self.inputs = {}
+        choices = {
+            "stage_label": ("当前阶段", list(zip(["未判断", "初始", "摇青中", "静置中", "可杀青"], STAGES))),
+            "next_action": ("下一步建议", list(zip(["未判断", "继续静置", "开始摇青", "停止摇青", "开始杀青", "取样"], ACTIONS))),
         }
+        for key, name in zip(SCORES, ["香气强度", "叶片柔软度", "红边程度", "主观失水感", "判断信心"]):
+            choices[key] = (name, [("未判断", None), ("1 · 很低", 1), ("2 · 较低", 2), ("3 · 中等", 3), ("4 · 较高", 4), ("5 · 很高", 5)])
+        for key, (name, items) in choices.items():
+            widget = QtWidgets.QComboBox()
+            for label, value in items:
+                widget.addItem(label, value)
+            if previous:
+                widget.setCurrentIndex(max(0, widget.findData(previous.get(key))))
+            self.inputs[key] = widget
+            form.addRow(name, widget)
+        self.note = QtWidgets.QPlainTextEdit((previous or {}).get("free_note", ""))
+        self.note.setMaximumHeight(100)
+        form.addRow("观察说明", self.note)
+        buttons = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Save | QtWidgets.QDialogButtonBox.Cancel)
+        buttons.accepted.connect(self.accept); buttons.rejected.connect(self.reject)
+        form.addRow(buttons)
 
-    def run(self) -> None:
-        if self.simulate:
-            self.status.emit("SIMULATE")
-            seq = 0
-            while self._running:
-                self.sensor.emit(self._mock_frame(seq))
-                seq += 1
-                self.msleep(1000)
-            return
-
-        try:
-            self._serial = serial.Serial(self.port, self.baud, timeout=1.0)
-            self.status.emit(f"CONNECTED {self.port}")
-            while self._running:
-                raw = self._serial.readline()
-                if not raw:
-                    continue
-                try:
-                    obj = json.loads(raw.decode("utf-8", errors="strict").strip())
-                except Exception as exc:
-                    self.error.emit(f"JSON parse error: {exc}")
-                    continue
-                if not isinstance(obj, dict):
-                    self.error.emit("JSON frame must be an object")
-                    continue
-                if obj.get("type") == "sensor":
-                    self.sensor.emit(obj)
-                elif obj.get("type") == "status":
-                    self.status.emit(str(obj.get("message", "status")))
-        except Exception as exc:
-            self.error.emit(str(exc))
-        finally:
-            if self._serial and self._serial.is_open:
-                self._serial.close()
-            self.status.emit("DISCONNECTED")
-
-
-class SessionLogger:
-    def __init__(self) -> None:
-        self.active = False
-        self.batch_id = ""
-        self.operator = ""
-        self.root: Path | None = None
-        self.sensor_file = None
-        self.events_file = None
-        self.sensor_writer = None
-        self.events_writer = None
-        self.event_id = 0
-        self.started_monotonic = 0.0
-
-    def start(self, batch_id: str, operator: str, mode: str) -> Path:
-        if self.active:
-            raise RuntimeError("session already active")
-        self.batch_id = batch_id.strip() or default_batch_id()
-        if (not re.fullmatch(r"[\w-]{1,80}", self.batch_id)
-                or self.batch_id.upper() in {"CON", "PRN", "AUX", "NUL", *[f"COM{i}" for i in range(1, 10)], *[f"LPT{i}" for i in range(1, 10)]}):
-            raise ValueError("批次编号只能包含字母、数字、下划线或短横线（1–80 字），不能使用系统保留名称")
-        self.operator = operator.strip() or "unknown"
-        self.root = DATA_ROOT / self.batch_id
-        self.root.mkdir(parents=True, exist_ok=False)
-        images = self.root / "images"
-        images.mkdir()
-        self.event_id = 0
-
-        meta = {
-            "batch_id": self.batch_id,
-            "project": "qingyun-zhikong",
-            "operator": self.operator,
-            "created_at": now_iso(),
-            "device": {
-                "hardware_version": "MVP-v0.1",
-                "firmware": "esp32_s3_mock-or-real-v0.1",
-                "host_software": "host_mvp-v0.1",
-            },
-            "experiment": {
-                "mode": "passive_monitoring",
-                "source_mode": mode,
-                "protocol_version": "JSONL-v0.1",
-            },
-            "tea": {
-                "cultivar": None,
-                "origin": None,
-                "picking_standard": None,
-                "fresh_mass_g": None,
-            },
-        }
-        (self.root / "meta.yaml").write_text(
-            yaml.safe_dump(meta, allow_unicode=True, sort_keys=False), encoding="utf-8"
-        )
-
-        self.sensor_file = None
-        self.events_file = None
-        try:
-            self.sensor_file = (self.root / "sensor_1hz.csv").open("w", newline="", encoding="utf-8-sig")
-            self.events_file = (self.root / "events.csv").open("w", newline="", encoding="utf-8-sig")
-            self.sensor_writer = csv.DictWriter(self.sensor_file, fieldnames=SENSOR_FIELDS)
-            self.events_writer = csv.DictWriter(self.events_file, fieldnames=EVENT_FIELDS)
-            self.sensor_writer.writeheader()
-            self.events_writer.writeheader()
-            self.sensor_file.flush()
-            self.events_file.flush()
-            self.started_monotonic = time.monotonic()
-            self.active = True
-            self.event("SESSION_START", "", "session started")
-        except Exception:
-            self.active = False
-            try:
-                if self.sensor_file:
-                    self.sensor_file.close()
-            finally:
-                if self.events_file:
-                    self.events_file.close()
-            raise
-        return self.root
-
-    def event(self, event_type: str, event_value: str = "", note: str = "") -> None:
-        if not self.active or self.events_writer is None or self.events_file is None:
-            return
-        self.event_id += 1
-        self.events_writer.writerow(
-            {
-                "event_id": self.event_id,
-                "batch_id": self.batch_id,
-                "host_time_iso": now_iso(),
-                "host_monotonic_s": f"{time.monotonic():.6f}",
-                "event_type": event_type,
-                "event_value": event_value,
-                "operator": self.operator,
-                "note": note,
-            }
-        )
-        self.events_file.flush()
-
-    def write_sensor(self, row: dict[str, Any]) -> None:
-        if not self.active or self.sensor_writer is None or self.sensor_file is None:
-            return
-        self.sensor_writer.writerow({k: row.get(k, "") for k in SENSOR_FIELDS})
-        self.sensor_file.flush()
-
-    def image_path(self) -> Path | None:
-        if not self.active or self.root is None:
-            return None
-        stamp = datetime.now().astimezone().strftime("%Y%m%d_%H%M%S_%f")[:-3]
-        return self.root / "images" / f"IMG_{stamp}.jpg"
-
-    def stop(self) -> Path | None:
-        if not self.active:
-            return
-        try:
-            self.event("SESSION_END", "", "session ended")
-        finally:
-            self.active = False
-            try:
-                if self.sensor_file:
-                    self.sensor_file.close()
-            finally:
-                if self.events_file:
-                    self.events_file.close()
-        return write_session_check(self.root)
-
+    def values(self):
+        return dict({key: widget.currentData() for key, widget in self.inputs.items()}, free_note=self.note.toPlainText())
 
 class MainWindow(QtWidgets.QMainWindow):
     def __init__(self, default_port: str, baud: int, simulate: bool):
@@ -291,10 +61,12 @@ class MainWindow(QtWidgets.QMainWindow):
         self.default_simulate = simulate
         self.reader: SensorReader | None = None
         self.logger = SessionLogger()
+        self.finishing = self.closing = self.disconnecting = False
+        self.shown_error = ""
         self.last_seq: int | None = None
         self.last_frame_mono = 0.0
         self.m0: float | None = None
-        self.camera: cv2.VideoCapture | None = None
+        self.camera = None
 
         self.time_buf: deque[float] = deque(maxlen=600)
         self.gas_buf = [deque(maxlen=600) for _ in range(4)]
@@ -389,216 +161,244 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.health_timer = QtCore.QTimer(self)
         self.health_timer.timeout.connect(self.health_check)
-        self.health_timer.start(1000)
+        self.health_timer.start(100)
+        self.setup_extensions(layout)
 
-    def append_log(self, text: str) -> None:
-        self.log.appendPlainText(f"[{datetime.now().strftime('%H:%M:%S')}] {text}")
 
-    def toggle_connection(self) -> None:
+    def setup_extensions(self, layout):
+        self.setWindowTitle("青韵智控 · 采集工作台 v0.3")
+        self.resize(1220, 880)
+        self.sim_check.setText("模拟传感器与图像（非实验数据）")
+        self.operator_edit.clear(); self.operator_edit.setPlaceholderText("操作员，未知可空")
+        metadata = QtWidgets.QHBoxLayout()
+        self.meta_inputs = {}
+        for key, name in [("cultivar", "品种"), ("origin", "产地"), ("protocol_id", "实验方案编号")]:
+            entry = QtWidgets.QLineEdit(); entry.setPlaceholderText(name + "（未知可空）")
+            self.meta_inputs[key] = entry; metadata.addWidget(entry)
+        layout.insertLayout(2, metadata)
+        commands = QtWidgets.QHBoxLayout()
+        self.command_buttons = []
+        for name, payload in [("设备信息", {"cmd": "info"}), ("空载去皮", {"cmd": "tare"})]:
+            button = QtWidgets.QPushButton(name)
+            button.clicked.connect(lambda checked=False, p=payload: self.send_command(p))
+            commands.addWidget(button); self.command_buttons.append((button, payload["cmd"]))
+        self.grams = QtWidgets.QDoubleSpinBox()
+        self.grams.setRange(0.1, 20000); self.grams.setValue(500); self.grams.setSuffix(" g 砝码")
+        commands.addWidget(self.grams)
+        calibration = QtWidgets.QPushButton("砝码标定")
+        calibration.clicked.connect(lambda: self.send_command(dict(cmd="calibrate", grams=self.grams.value())))
+        commands.addWidget(calibration); self.command_buttons.append((calibration, "calibrate"))
+        self.duration = QtWidgets.QSpinBox()
+        self.duration.setRange(1, 120); self.duration.setValue(10); self.duration.setSuffix(" 秒")
+        commands.addWidget(self.duration)
+        for name, mode in [("采样", "sample"), ("吹扫", "purge")]:
+            button = QtWidgets.QPushButton(name)
+            button.clicked.connect(lambda checked=False, m=mode: self.send_command(dict(cmd="air", mode=m, duration_ms=self.duration.value()*1000)))
+            commands.addWidget(button); self.command_buttons.append((button, "air"))
+        stop = QtWidgets.QPushButton("停止气路")
+        stop.clicked.connect(lambda: self.send_command(dict(cmd="stop")))
+        commands.addWidget(stop); self.command_buttons.append((stop, "stop"))
+        layout.insertLayout(3, commands)
+        self.command_label = QtWidgets.QLabel("去皮/标定仅在批次外进行；气路状态是输出命令，不是阀位或流量反馈。")
+        self.command_label.setWordWrap(True); layout.insertWidget(4, self.command_label)
+        photo = QtWidgets.QHBoxLayout()
+        self.auto_photo = QtWidgets.QCheckBox("每30秒自动拍照，关键事件补拍")
+        self.auto_photo.setChecked(True); photo.addWidget(self.auto_photo)
+        self.preview = QtWidgets.QLabel("照片预览 · 默认相机0")
+        self.preview.setFixedSize(220, 130); self.preview.setAlignment(QtCore.Qt.AlignCenter)
+        photo.addWidget(self.preview)
+        self.photo_status = QtWidgets.QLabel("后台保存照片；结束批次等待已提交照片")
+        self.photo_status.setWordWrap(True); photo.addWidget(self.photo_status, 1)
+        revise = QtWidgets.QPushButton("修订最近标签")
+        revise.clicked.connect(self.revise_label); photo.addWidget(revise)
+        layout.insertLayout(layout.count()-1, photo)
+        self.photo_timer = QtCore.QTimer(self)
+        self.photo_timer.timeout.connect(self.auto_snapshot); self.photo_timer.start(30000)
+
+    def append_log(self, text):
+        self.log.appendPlainText(f"[{datetime.now():%H:%M:%S}] {text}")
+
+    def toggle_connection(self):
         if self.reader and self.reader.isRunning():
-            self.reader.stop()
-            self.reader.wait(1500)
-            self.reader = None
-            self.connect_btn.setText("连接")
-            self.port_edit.setEnabled(True)
-            self.sim_check.setEnabled(True)
+            self.disconnecting = True; self.reader.stop(); self.connect_btn.setEnabled(False)
             return
-
-        port = self.port_edit.text().strip()
-        simulate = self.sim_check.isChecked()
+        if self.camera and self.camera.thread.is_alive():
+            self.camera.close(); self.append_log("相机正在关闭，请稍后连接"); return
+        port, simulate = self.port_edit.text().strip(), self.sim_check.isChecked()
         if not simulate and not port:
-            QtWidgets.QMessageBox.warning(self, "串口", "请输入串口，例如 COM5")
-            return
-        self.reader = SensorReader(port, self.baud, simulate)
-        self.last_seq = None
+            self.on_error("请输入串口，例如 COM5"); return
+        self.reader = SensorReader(port, self.baud, simulate, self.logger)
+        self.reader.sensor.connect(self.on_sensor); self.reader.status.connect(self.on_status)
+        self.reader.error.connect(self.on_error); self.reader.command_result.connect(self.on_command)
+        self.port_edit.setEnabled(False); self.sim_check.setEnabled(False)
+        self.reader.start(); self.connect_btn.setText("断开")
         self.last_frame_mono = time.monotonic()
-        self.port_edit.setEnabled(False)
-        self.sim_check.setEnabled(False)
-        self.reader.sensor.connect(self.on_sensor)
-        self.reader.status.connect(self.on_status)
-        self.reader.error.connect(self.on_error)
-        self.reader.start()
-        self.connect_btn.setText("断开")
 
-    @QtCore.Slot(str)
-    def on_status(self, text: str) -> None:
-        self.conn_label.setText(text)
-        if text == "DISCONNECTED" and not self.logger.active:
-            self.port_edit.setEnabled(True)
-            self.sim_check.setEnabled(True)
-            self.connect_btn.setText("连接")
-        self.append_log(text)
+    def on_status(self, text):
+        self.conn_label.setText(text); self.append_log(text)
 
-    @QtCore.Slot(str)
-    def on_error(self, text: str) -> None:
-        self.append_log(f"ERROR: {text}")
-        self.conn_label.setText("故障")
+    def on_error(self, text):
+        self.conn_label.setText("故障 / 请查看记录"); self.append_log(f"ERROR: {text}")
 
-    def start_session(self) -> None:
+    def send_command(self, payload):
         try:
-            if not self.reader or not self.reader.isRunning():
+            if not self.reader:
+                raise ValueError("请先连接设备")
+            self.reader.submit(payload)
+        except (ValueError, RuntimeError) as exc:
+            self.on_error(str(exc))
+
+    def on_command(self, record):
+        phases = dict(queued="已排队", sent="已发送", running="执行中", completed="设备报告完成", accepted="已接受（不代表动作完成）", rejected="设备拒绝", unknown="结果未知，未重发")
+        text = f"{record['payload']['cmd']}: {phases.get(record['phase'], record['phase'])}"
+        text += " " + str(record.get("error") or record.get("response", {}).get("message", ""))
+        self.command_label.setText(text); self.append_log(text)
+
+    def start_session(self):
+        try:
+            if self.logger.journal.error:
+                raise RuntimeError(self.logger.journal.error + "；请修复存储后重启程序")
+            if not self.reader or not self.reader.connected:
                 raise RuntimeError("请先连接设备或启动模拟数据")
-            mode = "simulate" if self.reader.simulate else "serial"
-            root = self.logger.start(self.batch_edit.text(), self.operator_edit.text(), mode)
+            if self.reader.tracker.uncertain:
+                raise RuntimeError("设备操作结果尚未确认，请检查设备后断开并重新连接")
+            if self.reader.tracker.pending or "CALIBRATING" in str(self.reader.latest.get("quality_flag", "")):
+                raise RuntimeError("请等待设备命令或标定完成")
+            root = self.logger.start(self.batch_edit.text(), self.operator_edit.text(), "simulate" if self.reader.simulate else "serial",
+                                     {k: w.text().strip() or None for k, w in self.meta_inputs.items()})
         except Exception as exc:
-            QtWidgets.QMessageBox.critical(self, "开始失败", str(exc))
+            self.on_error(f"开始失败: {exc}"); return
+        self.finishing = False; self.shown_error = ""
+        self.start_btn.setEnabled(False); self.stop_btn.setEnabled(True); self.connect_btn.setEnabled(False)
+        for w in [self.batch_edit, self.operator_edit, *self.meta_inputs.values()]:
+            w.setEnabled(False)
+        self.loss_label.setText("失水率: --")
+        self.append_log(f"批次开始: {root}"); self.photo_timer.start(30000); self.auto_snapshot()
+
+    def stop_session(self):
+        if not self.logger.writer:
             return
-        self.start_btn.setEnabled(False)
-        self.stop_btn.setEnabled(True)
-        self.connect_btn.setEnabled(False)
-        self.batch_edit.setEnabled(False)
-        self.operator_edit.setEnabled(False)
-        self.m0 = None
-        self.last_seq = None
-        self.append_log(f"session started: {root}")
+        self.logger.stop(wait=False); self.finishing = True; self.stop_btn.setEnabled(False)
+        self.append_log("正在排空数据和照片队列…")
 
-    def stop_session(self) -> None:
-        try:
-            report = self.logger.stop()
-            if report:
-                self.append_log(f"完整性报告: {report}")
-        except Exception as exc:
-            self.on_error(f"结束批次或生成报告失败: {exc}")
-        self.start_btn.setEnabled(True)
-        self.stop_btn.setEnabled(False)
-        self.connect_btn.setEnabled(True)
-        self.batch_edit.setEnabled(True)
-        self.operator_edit.setEnabled(True)
-        self.batch_edit.setText(default_batch_id())
-        if not self.reader or not self.reader.isRunning():
-            self.port_edit.setEnabled(True)
-            self.sim_check.setEnabled(True)
-        self.append_log("session ended")
-
-    def mark_event(self, event_type: str) -> None:
+    def mark_event(self, event_type):
         if not self.logger.active:
-            QtWidgets.QMessageBox.information(self, "事件", "请先开始批次")
-            return
-        note = self.note_edit.text().strip()
-        if event_type == "SNAPSHOT":
-            ok = self.capture_snapshot()
-            self.logger.event("SNAPSHOT", "manual", note if ok else f"camera failed; {note}")
-        else:
-            self.logger.event(event_type, "", note)
+            self.on_error("请先开始批次"); return
+        event_id = self.logger.event(event_type, note=self.note_edit.text().strip())
         self.note_edit.clear()
-        self.append_log(f"event: {event_type}")
+        if event_type == "SNAPSHOT" or self.auto_photo.isChecked():
+            self.capture_snapshot(event_id)
+        if event_type == "MASTER_CHECK" and event_id:
+            self.edit_label(event_id)
+        self.append_log(f"事件: {event_type}")
 
-    def capture_snapshot(self) -> bool:
-        path = self.logger.image_path()
-        if path is None:
-            return False
-        if self.camera is None:
-            self.camera = cv2.VideoCapture(0, cv2.CAP_DSHOW)
-            self.camera.set(cv2.CAP_PROP_FRAME_WIDTH, 1920)
-            self.camera.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080)
-        ok, frame = self.camera.read()
-        if not ok or frame is None:
-            return False
-        return bool(cv2.imwrite(str(path), frame))
+    def edit_label(self, event_id, revise=False):
+        dialog = LabelDialog(self, self.logger.latest_label if revise else None)
+        if dialog.exec() == QtWidgets.QDialog.Accepted:
+            try:
+                row = self.logger.label(dialog.values(), event_id, revise)
+                self.append_log(f"标签已排队保存，修订号 {row['revision']}")
+            except (ValueError, OSError) as exc:
+                self.on_error(str(exc))
 
-    @QtCore.Slot(dict)
-    def on_sensor(self, frame: dict[str, Any]) -> None:
-        recv_mono = time.monotonic()
-        seq = frame.get("seq")
-        if (not isinstance(seq, int) or isinstance(seq, bool) or seq < 0
-                or not isinstance(frame.get("gas_adc"), list)
-                or not isinstance(frame.get("gas_v"), list)):
-            self.on_error("无效传感器帧：seq 或气敏数组格式错误")
+    def revise_label(self):
+        if self.logger.active and self.logger.latest_label:
+            self.edit_label(self.logger.latest_label["event_id"], True)
+        else:
+            self.on_error("当前批次没有可修订标签")
+
+    def auto_snapshot(self):
+        if self.logger.active and self.auto_photo.isChecked():
+            self.capture_snapshot()
+
+    def capture_snapshot(self, event_id=""):
+        if not self.logger.active:
+            return False
+        if self.camera is None or not self.camera.thread.is_alive():
+            self.camera = CameraWorker(self.logger, simulate=self.reader.simulate if self.reader else self.sim_check.isChecked())
+            self.camera.result.connect(self.on_photo)
+        return self.camera.request(event_id)
+
+    def on_photo(self, result):
+        if result.get("token") and result["token"] != self.logger.token:
             return
-        self.last_frame_mono = recv_mono
-        device_quality = frame.get("quality_flag", "OK")
-        quality = device_quality if isinstance(device_quality, str) and device_quality else "SENSOR_ERROR"
-        if self.last_seq is not None and seq != self.last_seq + 1:
-            quality = "SERIAL_GAP" if quality == "OK" else f"{quality};SERIAL_GAP"
-            self.append_log(f"seq gap: {self.last_seq} -> {seq}")
-        self.last_seq = seq
+        if not result.get("ok"):
+            self.photo_status.setText(f"拍照失败: {result.get('error')}"); return
+        pixmap = QtGui.QPixmap(); pixmap.loadFromData(result["preview"])
+        self.preview.setPixmap(pixmap.scaled(220, 130, QtCore.Qt.KeepAspectRatio, QtCore.Qt.SmoothTransformation))
+        self.photo_status.setText("照片已保存 · " + result["datetime_iso"][11:19])
 
-        gas_adc = list(frame.get("gas_adc", []))
-        gas_v = list(frame.get("gas_v", []))
-        gas_adc = (gas_adc + [None] * 4)[:4]
-        gas_v = (gas_v + [None] * 4)[:4]
-
-        mass = frame.get("mass_g")
-        if (self.logger.active and self.m0 is None and isinstance(mass, (int, float))
-                and not isinstance(mass, bool) and math.isfinite(mass) and mass > 0):
-            self.m0 = float(mass)
-            self.logger.event("T0_INITIAL", f"mass_g={self.m0:.3f}", "automatic first valid mass")
-
-        row = {
-            "batch_id": self.logger.batch_id if self.logger.active else "",
-            "seq": seq,
-            "datetime_iso": now_iso(),
-            "host_monotonic_s": f"{recv_mono:.6f}",
-            "mcu_t_ms": frame.get("t_ms", ""),
-            "gas_1_adc": gas_adc[0],
-            "gas_2_adc": gas_adc[1],
-            "gas_3_adc": gas_adc[2],
-            "gas_4_adc": gas_adc[3],
-            "gas_1_v": gas_v[0],
-            "gas_2_v": gas_v[1],
-            "gas_3_v": gas_v[2],
-            "gas_4_v": gas_v[3],
-            "bme688_gas_ohm": frame.get("bme688_gas_ohm", ""),
-            "chamber_temp_c": frame.get("chamber_t_c", ""),
-            "chamber_rh_pct": frame.get("chamber_rh_pct", ""),
-            "ambient_temp_c": frame.get("ambient_t_c", ""),
-            "ambient_rh_pct": frame.get("ambient_rh_pct", ""),
-            "leaf_temp_c": frame.get("leaf_t_c", ""),
-            "mass_g": mass if mass is not None else "",
-            "pump_state": frame.get("pump", ""),
-            "sample_valve_state": frame.get("valve_sample", ""),
-            "purge_valve_state": frame.get("valve_purge", ""),
-            "quality_flag": quality,
-            "gas_enabled_mask": frame.get("gas_enabled_mask", 15),
-            "device_frame_json": json.dumps(frame, ensure_ascii=False, separators=(",", ":")),
-        }
+    def on_sensor(self, message):
         try:
-            self.logger.write_sensor(row)
-        except OSError as exc:
-            self.on_error(f"数据写入失败: {exc}")
-            self.stop_session()
-            return
-
-        self.seq_label.setText(f"seq: {seq}")
-        if isinstance(mass, (int, float)):
-            self.mass_label.setText(f"质量: {float(mass):.2f} g")
-            if self.m0 and self.m0 > 0:
-                loss = (self.m0 - float(mass)) / self.m0
-                self.loss_label.setText(f"失水率: {loss * 100:.3f}%")
-        leaf = frame.get("leaf_t_c")
-        if isinstance(leaf, (int, float)):
-            self.leaf_label.setText(f"叶温: {float(leaf):.2f} °C")
-        self.env_label.setText(
-            f"环境: {frame.get('ambient_t_c', '--')} °C / {frame.get('ambient_rh_pct', '--')} %RH"
-        )
-        self.chamber_label.setText(
-            f"采样腔: {frame.get('chamber_t_c', '--')} °C / {frame.get('chamber_rh_pct', '--')} %RH"
-        )
-
-        x = recv_mono - self.t0_plot
-        self.time_buf.append(x)
-        for i in range(4):
-            if isinstance(gas_v[i], (int, float)):
-                self.gas_buf[i].append(float(gas_v[i]))
-            else:
-                self.gas_buf[i].append(float("nan"))
+            if "frame" in message:
+                frame, row, received = message["frame"], message["row"], message["received_mono"]
+            else:  # Direct injection for offline verification.
+                frame, received = message, time.monotonic()
+                row = self.logger.ingest(frame, now_iso(), received)
+        except (ValueError, TypeError) as exc:
+            self.on_error(f"无效传感器帧: {exc}"); return
+        self.last_frame_mono = received
+        self.seq_label.setText(f"seq: {frame['seq']} · {row['quality_flag']}")
+        mass = frame.get("mass_g")
+        self.mass_label.setText(f"质量: {mass:.2f} g" if finite_number(mass) else "质量: -- g")
+        if finite_number(mass) and self.logger.m0:
+            self.loss_label.setText(f"失水率: {(self.logger.m0-mass)/self.logger.m0*100:.3f}%")
+        self.leaf_label.setText(f"叶温: {frame.get('leaf_t_c', '--')} °C")
+        self.env_label.setText(f"环境: {frame.get('ambient_t_c', '--')} °C / {frame.get('ambient_rh_pct', '--')} %RH")
+        self.chamber_label.setText(f"采样腔: {frame.get('chamber_t_c', '--')} °C / {frame.get('chamber_rh_pct', '--')} %RH")
+        self.time_buf.append(received-self.t0_plot)
+        gas = (frame["gas_v"] + [None]*4)[:4]
+        for i, value in enumerate(gas):
+            self.gas_buf[i].append(float(value) if finite_number(value) else float('nan'))
             self.curves[i].setData(list(self.time_buf), list(self.gas_buf[i]))
 
-    def health_check(self) -> None:
-        if self.reader and self.reader.isRunning() and self.last_frame_mono:
-            age = time.monotonic() - self.last_frame_mono
-            if age > 3.0:
-                self.conn_label.setText(f"数据超时 {age:.1f}s")
+    def health_check(self):
+        failure = self.logger.error or self.logger.journal.error
+        if failure and failure != self.shown_error:
+            self.shown_error = failure; self.on_error(failure)
+            if self.logger.writer and (self.logger.active or not self.logger.finished):
+                self.stop_session()
+        if self.finishing and self.logger.finished and not self.logger.pending_images:
+            self.finishing = False
+            self.append_log(f"批次收尾完成: {self.logger.writer.report}；错误: {self.logger.error or '无'}")
+            self.start_btn.setEnabled(True); self.connect_btn.setEnabled(True)
+            for w in [self.batch_edit, self.operator_edit, *self.meta_inputs.values()]:
+                w.setEnabled(True)
+            self.batch_edit.setText(default_batch_id())
+        if self.disconnecting and self.reader and not self.reader.isRunning():
+            self.reader = None; self.disconnecting = False
+            if self.camera:
+                self.camera.close()
+            self.connect_btn.setEnabled(True); self.connect_btn.setText("连接")
+            self.port_edit.setEnabled(True); self.sim_check.setEnabled(True)
+        connected = bool(self.reader and self.reader.connected)
+        pending = self.reader.tracker.pending if self.reader else None
+        for button, cmd in self.command_buttons:
+            button.setEnabled(connected and (cmd == "stop" or not pending) and (cmd not in ("tare", "calibrate") or not (self.logger.active or self.finishing)))
+        if connected and time.monotonic()-self.last_frame_mono > 3:
+            self.conn_label.setText("传感器数据超时（已连接）")
+        if self.closing:
+            reader_done = not self.reader or not self.reader.isRunning()
+            if reader_done:
+                self.logger.journal.close()
+            if reader_done and self.logger.finished and not self.logger.pending_images and (not self.camera or not self.camera.thread.is_alive()) and self.logger.journal.finished:
+                self.close()
 
-    def closeEvent(self, event) -> None:  # noqa: N802
-        self.stop_session()
-        if self.reader:
-            self.reader.stop()
-            self.reader.wait(1000)
-        if self.camera is not None:
-            self.camera.release()
-        event.accept()
-
+    def closeEvent(self, event):
+        if not self.closing:
+            self.closing = True; self.stop_session()
+            if self.reader:
+                self.reader.stop()
+            if self.camera:
+                self.camera.close()
+            self.setEnabled(False)
+        ready = (not self.reader or not self.reader.isRunning()) and self.logger.finished and not self.logger.pending_images and (not self.camera or not self.camera.thread.is_alive())
+        if ready:
+            self.logger.journal.close()
+        if ready and self.logger.journal.finished:
+            event.accept()
+        else:
+            event.ignore()
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="青韵智控第一阶段上位机 MVP")
