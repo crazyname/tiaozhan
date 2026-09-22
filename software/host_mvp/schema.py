@@ -4,7 +4,7 @@ import json
 import math
 from datetime import datetime, timezone
 
-HOST_VERSION = "host_mvp-v0.8.0"
+HOST_VERSION = "host_mvp-v0.9.0"
 MOTOR_FIELDS = ["motor_compiled", "motor_interlock", "motor_running", "motor_fault", "shake_target_rpm", "shake_actual_rpm",
                 "shake_direction", "shake_start_time", "shake_end_time", "shake_duration_s", "shake_time_kind", "motor_current_a", "motor_pwm_duty"]
 SENSOR_FIELDS = ["batch_id", "seq", "datetime_iso", "host_monotonic_s", "mcu_t_ms"]

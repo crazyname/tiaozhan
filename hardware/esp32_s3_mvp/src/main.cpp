@@ -140,7 +140,7 @@ void command(const char *line) {
         if (!input["grams"].is<double>()) { status("grams must be numeric", false); return; }
         startCalibration(CalMode::Reference, input["grams"].as<double>());
     } else if (!strcmp(cmd, "info")) {
-        StaticJsonDocument<768> out;
+        StaticJsonDocument<1536> out;
         out["type"] = "status"; out["message"] = "firmware configuration";
         out["firmware"] = cfg::Firmware; out["hardware"] = cfg::Hardware;
         out["source_mode"] = "hardware"; out["air_compiled"] = cfg::AirCompiled;
@@ -148,6 +148,20 @@ void command(const char *line) {
         out["motor_compiled"] = motorReady(); out["motor_interlock"] = motorInterlocked();
         out["offset_known"] = offsetKnown;
         out["hx_offset"] = calibration.offset; out["hx_counts_per_g"] = calibration.scale;
+        out["device_id"] = String(static_cast<uint32_t>(ESP.getEfuseMac() >> 32), HEX) + String(static_cast<uint32_t>(ESP.getEfuseMac()), HEX);
+        out["preflight_schema"] = "QY-PREFLIGHT-1";
+        uint8_t mask = 0;
+        for (uint8_t i = 0; i < 4; ++i) if (cfg::GasEnabled[i]) mask |= 1 << i;
+        out["gas_enabled_mask"] = mask;
+        // Probe only configured addresses. Unlike scan, info never changes outputs.
+        auto devices = out.createNestedObject("i2c_present");
+        devices["ads_gas"] = i2cPresent(cfg::AdsGas);
+        devices["sht_ambient"] = i2cPresent(cfg::ShtAmbient);
+        devices["sht_chamber"] = i2cPresent(cfg::ShtChamber);
+        devices["mlx"] = i2cPresent(cfg::Mlx);
+        devices["bme"] = i2cPresent(cfg::Bme);
+        if (cfg::AuxEnabled) devices["ads_aux"] = i2cPresent(cfg::AdsAux);
+        if (out.overflowed()) { status("info document overflow", false); return; }
         emitJson(out);
     } else if (!strcmp(cmd, "scan")) {
         stopAir();
