@@ -463,8 +463,8 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def closeEvent(self, event):
         replay = getattr(self, "replay_window", None)
-        if replay and replay.loader and replay.loader.isRunning():
-            self.append_log("历史批次正在读取，完成后可退出")
+        if replay and replay.busy():
+            self.append_log("历史批次正在读取或导出报告，完成后可退出")
             event.ignore()
             return
         if replay:
