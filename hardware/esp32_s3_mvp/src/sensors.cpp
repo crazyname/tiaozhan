@@ -1,11 +1,19 @@
 #include "sensors.h"
 #include "config.h"
 #include "core.h"
+#ifdef QY_WOKWI_SIM
+#include "sim_profile.h"
+#endif
 
 bool i2cPresent(uint8_t address) {
+#ifdef QY_WOKWI_SIM
+    return qy_sim::i2cPresent(address);
+#else
     Wire.beginTransmission(address);
     return Wire.endTransmission() == 0;
+#endif
 }
+
 static bool readReg(uint8_t address, uint8_t reg, uint8_t *data, size_t length) {
     Wire.beginTransmission(address);
     Wire.write(reg);
@@ -14,6 +22,7 @@ static bool readReg(uint8_t address, uint8_t reg, uint8_t *data, size_t length) 
     for (size_t i = 0; i < length; ++i) data[i] = Wire.read();
     return true;
 }
+
 static bool writeReg(uint8_t address, uint8_t reg, const uint8_t *data, size_t length) {
     Wire.beginTransmission(address);
     Wire.write(reg);
@@ -22,6 +31,9 @@ static bool writeReg(uint8_t address, uint8_t reg, const uint8_t *data, size_t l
 }
 
 bool readAds(uint8_t address, uint8_t channel, int16_t &value) {
+#ifdef QY_WOKWI_SIM
+    return qy_sim::readAds(address, channel, value);
+#else
     if (channel > 3) return false;
     // OS=1, single-ended MUX, PGA +/-4.096V, single-shot, 128 SPS, comparator off.
     uint16_t config = 0x8000 | ((4 + channel) << 12) | 0x0200 | 0x0100 | 0x0080 | 0x0003;
@@ -39,9 +51,13 @@ bool readAds(uint8_t address, uint8_t channel, int16_t &value) {
         }
     }
     return false;
+#endif
 }
 
 bool readSht(uint8_t address, float &temperature, float &humidity) {
+#ifdef QY_WOKWI_SIM
+    return qy_sim::readSht(address, temperature, humidity);
+#else
     Wire.beginTransmission(address);
     Wire.write(0x24); Wire.write(0x00); // High repeatability, clock stretching disabled.
     if (Wire.endTransmission() != 0) return false;
@@ -53,9 +69,13 @@ bool readSht(uint8_t address, float &temperature, float &humidity) {
     temperature = -45.0f + 175.0f * ((bytes[0] << 8) | bytes[1]) / 65535.0f;
     humidity = 100.0f * ((bytes[3] << 8) | bytes[4]) / 65535.0f;
     return true;
+#endif
 }
 
 bool readLeaf(float &temperature) {
+#ifdef QY_WOKWI_SIM
+    return qy_sim::readLeaf(temperature);
+#else
     uint8_t bytes[3];
     if (!readReg(cfg::Mlx, 0x07, bytes, 3)) return false;
     const uint8_t packet[] = {static_cast<uint8_t>(cfg::Mlx << 1), 0x07,
@@ -65,6 +85,7 @@ bool readLeaf(float &temperature) {
     if (raw & 0x8000) return false; // Device error flag.
     temperature = raw * 0.02f - 273.15f;
     return isfinite(temperature);
+#endif
 }
 
 bool readHx(int32_t &raw) {
@@ -99,7 +120,11 @@ static void bmeDelay(uint32_t us, void *) {
     if (us >= 1000) delay(us / 1000);
     if (us % 1000) delayMicroseconds(us % 1000);
 }
+
 bool readBme(float &gasOhm) {
+#ifdef QY_WOKWI_SIM
+    return qy_sim::readBme(gasOhm);
+#else
     static Bme68x sensor;
     static bool ready = false, attempted = false;
     static uint32_t lastAttempt = 0;
@@ -126,4 +151,5 @@ bool readBme(float &gasOhm) {
     if ((data.status & required) != required || !isfinite(data.gas_resistance) || data.gas_resistance <= 0) return false;
     gasOhm = data.gas_resistance;
     return true;
+#endif
 }
