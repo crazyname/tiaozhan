@@ -4,12 +4,15 @@ import json
 import math
 from datetime import datetime, timezone
 
-HOST_VERSION = "host_mvp-v0.7.0"
+HOST_VERSION = "host_mvp-v0.8.0"
+MOTOR_FIELDS = ["motor_compiled", "motor_interlock", "motor_running", "motor_fault", "shake_target_rpm", "shake_actual_rpm",
+                "shake_direction", "shake_start_time", "shake_end_time", "shake_duration_s", "shake_time_kind", "motor_current_a", "motor_pwm_duty"]
 SENSOR_FIELDS = ["batch_id", "seq", "datetime_iso", "host_monotonic_s", "mcu_t_ms"]
 SENSOR_FIELDS += [f"gas_{i}_adc" for i in range(1, 5)] + [f"gas_{i}_v" for i in range(1, 5)]
 SENSOR_FIELDS += ["bme688_gas_ohm", "chamber_temp_c", "chamber_rh_pct", "ambient_temp_c",
                   "ambient_rh_pct", "leaf_temp_c", "mass_g", "pump_state", "sample_valve_state",
                   "purge_valve_state", "quality_flag", "gas_enabled_mask", "device_frame_json"]
+SENSOR_FIELDS += MOTOR_FIELDS
 EVENT_FIELDS = ["event_id", "batch_id", "host_time_iso", "host_monotonic_s", "event_type", "event_value", "operator", "note"]
 IMAGE_FIELDS = ["filename", "batch_id", "datetime_iso", "host_monotonic_s", "event_nearby", "exposure", "white_balance", "source_mode", "note"]
 
@@ -44,5 +47,7 @@ def sensor_row(frame, batch_id, iso, mono, previous_seq=None):
                            ("valve_sample", "sample_valve_state"), ("valve_purge", "purge_valve_state")]:
         row[target] = frame.get(source)
     for name in ("bme688_gas_ohm", "chamber_rh_pct", "ambient_rh_pct", "mass_g"):
+        row[name] = frame.get(name)
+    for name in MOTOR_FIELDS:
         row[name] = frame.get(name)
     return row

@@ -16,6 +16,7 @@ SERIES = {
     "ambient_temp_c": "环境温度（℃）", "ambient_rh_pct": "环境湿度（%RH）",
     "chamber_temp_c": "采样腔温度（℃）", "chamber_rh_pct": "采样腔湿度（%RH）",
     "bme688_gas_ohm": "BME688（Ω）",
+    "shake_target_rpm": "滚筒目标转速（RPM）", "shake_actual_rpm": "滚筒反馈转速（带符号RPM）",
 }
 
 
@@ -73,7 +74,7 @@ class BatchSnapshot:
         if not sensors:
             self.warnings.append("没有传感器记录")
         fields = set(sensors[0][1]) if sensors else set()
-        missing = sorted(set(SERIES) - {"loss_pct"} - fields)
+        missing = sorted(set(SERIES) - {"loss_pct", "shake_target_rpm", "shake_actual_rpm"} - fields)
         if missing:
             self.warnings.append("缺失曲线列: " + ", ".join(missing))
         # A single time basis for all tables; never mix epoch seconds and uptime.

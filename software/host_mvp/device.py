@@ -5,10 +5,11 @@ import math
 import queue
 import threading
 import time
+import uuid
 
 import serial
 from PySide6 import QtCore
-from schema import now_iso, sensor_row
+from schema import now_iso, sensor_row, finite_number
 
 class CommandTracker:
     def __init__(self, clock=time.monotonic):
@@ -21,17 +22,19 @@ class CommandTracker:
     def start(self, payload):
         with self.lock:
             cmd = payload.get("cmd")
-            if cmd not in ("info", "tare", "calibrate", "air", "stop"):
+            if cmd not in ("info", "tare", "calibrate", "air", "stop", "motor", "motor_stop", "motor_reset"):
                 raise ValueError("不支持的命令")
-            if self.pending and cmd != "stop":
+            if self.pending and cmd not in ("stop", "motor_stop"):
                 raise ValueError("等待当前命令完成")
-            if self.uncertain and cmd not in ("info", "stop"):
+            if self.uncertain and cmd not in ("info", "stop", "motor_stop"):
                 raise ValueError("上次操作结果未知，请确认设备后重新连接；不会自动重发")
-            if cmd == "stop" and self.pending:
+            if cmd in ("stop", "motor_stop") and self.pending:
                 self.uncertain = True
             self.number += 1
             self.pending = dict(request_id=self.number, payload=dict(payload), phase="queued",
                                 deadline=self.clock() + (15 if cmd in ("tare", "calibrate") else 4))
+            if cmd.startswith("motor"):
+                self.pending["payload"]["request_id"] = self.number
             return dict(self.pending)
 
     def status(self, frame):
@@ -42,7 +45,10 @@ class CommandTracker:
             message = frame.get("message", "")
             recognized = False
             phase = "completed"
-            if cmd == "info":
+            if cmd.startswith("motor"):
+                recognized = frame.get("cmd") == cmd and frame.get("request_id") == self.pending["request_id"]
+                phase = "accepted"
+            elif cmd == "info":
                 recognized = message == "firmware configuration"
             elif cmd == "stop":
                 recognized = message == "air stopped"
@@ -103,6 +109,12 @@ class SensorReader(QtCore.QThread):
         self.sim_cal_until = 0
         self.sim_calibrated = True
         self.last_seq = None
+        self.motor_session = uuid.uuid4().hex
+        self.motor_lease_active = False
+        self.operator_alive = time.monotonic()
+        self.last_motor_lease = 0
+        self.latest_received = 0
+        self.sim_motor = dict(running=False, target=0, direction=1, started=0, ended=0, duration=0, lease=0, fault="NONE")
 
     def log(self, kind, payload):
         if self.logger:
@@ -110,6 +122,11 @@ class SensorReader(QtCore.QThread):
 
     def result(self, result):
         if result:
+            cmd = result.get("payload", {}).get("cmd")
+            if cmd == "motor" and result["phase"] == "accepted":
+                self.motor_lease_active = True
+            elif cmd == "motor_stop" or result["phase"] == "unknown":
+                self.motor_lease_active = False
             self.log("commands", result)
             self.command_result.emit(result)
 
@@ -118,6 +135,17 @@ class SensorReader(QtCore.QThread):
             raise ValueError("设备未连接")
         if payload["cmd"] in ("tare", "calibrate") and self.logger and self.logger.active:
             raise ValueError("批次采集中禁止修改称重标定，请先结束批次")
+        if payload["cmd"] in ("tare", "calibrate") and self.latest.get("motor_running"):
+            raise ValueError("请先停止滚筒并确认静止再标定")
+        if payload["cmd"] in ("motor", "motor_reset"):
+            if not self.latest.get("motor_compiled") or time.monotonic()-self.latest_received > 3:
+                raise ValueError("设备未报告可用滚筒固件或遥测过期")
+            if "CALIBRATING" in str(self.latest.get("quality_flag", "")):
+                raise ValueError("标定期间禁止滚筒动作")
+        if payload["cmd"] == "motor":
+            if not finite_number(payload.get("rpm")) or not 5 <= payload["rpm"] <= 30 or type(payload.get("direction")) is not int or payload["direction"] not in (-1, 1) or type(payload.get("duration_ms")) is not int or not 1000 <= payload["duration_ms"] <= 300000:
+                raise ValueError("滚筒参数：5～30RPM、方向±1、时长1～300秒")
+            payload = dict(payload, session_id=self.motor_session)
         if payload["cmd"] == "air" and "CALIBRATING" in str(self.latest.get("quality_flag", "")):
             raise ValueError("设备正在标定")
         if payload["cmd"] == "calibrate" and not 0 < float(payload.get("grams", 0)) <= 20000:
@@ -126,7 +154,7 @@ class SensorReader(QtCore.QThread):
                 type(payload.get("duration_ms")) is not int or not 1000 <= payload["duration_ms"] <= 120000):
             raise ValueError("气路模式或时长无效")
         # Never leave a queued action ahead of an operator STOP.
-        if payload["cmd"] == "stop":
+        if payload["cmd"] in ("stop", "motor_stop"):
             if self.tracker.pending:
                 self.result(self.tracker.abort("被停止命令中断，原操作结果需确认"))
             self._clear_commands()
@@ -143,18 +171,28 @@ class SensorReader(QtCore.QThread):
                 return
 
     def stop(self):
+        self.motor_lease_active = False
         self._stop.set()  # Only the run thread closes the serial handle.
 
     def _mock_frame(self, seq):
         t = time.monotonic()
         adc = [int(15000 + i * 2000 + 600 * math.sin(t / (15 + i * 3))) for i in range(4)]
         moving = t < self.sim_air_until
+        motor = self.sim_motor
+        if motor["running"] and (t-motor["lease"] >= 1.2 or t-motor["started"] >= motor["duration"]):
+            motor["running"] = False; motor["ended"] = t
+            if t-motor["lease"] >= 1.2:
+                motor["fault"] = "HOST_TIMEOUT"
         return dict(type="sensor", seq=seq, t_ms=int(t * 1000), gas_adc=adc, gas_v=[v * 4.096 / 32768 for v in adc],
                     bme688_gas_ohm=183000, chamber_t_c=27.2, chamber_rh_pct=71.0, ambient_t_c=26.8,
                     ambient_rh_pct=69.0, leaf_t_c=26.5, mass_g=4000 - seq * 0.012 if self.sim_calibrated else None,
                     pump=int(moving), valve_sample=int(moving and self.sim_air_mode == "sample"),
                     valve_purge=int(moving and self.sim_air_mode == "purge"), source_mode="simulate",
                     firmware="HOST-SIM-0.3", device_id="SIMULATOR", gas_enabled_mask=15,
+                    motor_compiled=True, motor_interlock=True, motor_running=motor["running"], motor_fault=motor["fault"],
+                    shake_target_rpm=motor["target"], shake_actual_rpm=motor["target"]*motor["direction"] if motor["running"] else 0,
+                    shake_direction=motor["direction"], shake_start_time=int(motor["started"]*1000), shake_end_time=int(motor["ended"]*1000),
+                    shake_duration_s=motor["duration"], motor_current_a=None, shake_time_kind="mcu_uptime_ms",
                     quality_flag="CALIBRATING" if self.sim_cal_until else "OK")
 
     def consume(self, raw):
@@ -180,6 +218,9 @@ class SensorReader(QtCore.QThread):
                     row = self.logger.ingest(frame, iso, mono) if self.logger else sensor_row(frame, "", iso, mono)
                     self.last_seq = frame["seq"]
                     self.latest = frame
+                    self.latest_received = mono
+                    if frame.get("motor_running") is False:
+                        self.motor_lease_active = False
                     self.sensor.emit(dict(frame=frame, row=row, received_mono=mono))
                 elif frame.get("type") == "status":
                     self.log("device_health", dict(kind="DEVICE_STATUS", frame=frame))
@@ -194,6 +235,22 @@ class SensorReader(QtCore.QThread):
         response = dict(type="status", ok=True)
         if cmd == "info":
             response.update(message="firmware configuration", firmware="HOST-SIM-0.3", source_mode="simulate", air_enable=True)
+        elif cmd.startswith("motor"):
+            motor = self.sim_motor
+            response.update(cmd=cmd, request_id=payload.get("request_id"), message="motor command accepted; inspect encoder telemetry")
+            if cmd == "motor":
+                if motor["running"] or motor["fault"] != "NONE":
+                    response.update(ok=False, message="motor rejected: running or fault")
+                else:
+                    motor.update(running=True, target=payload["rpm"], direction=payload["direction"],
+                                 duration=payload["duration_ms"]/1000, started=time.monotonic(), ended=0, lease=time.monotonic())
+            elif cmd == "motor_stop":
+                motor.update(running=False, ended=time.monotonic())
+            elif cmd == "motor_reset":
+                if motor["running"]:
+                    response.update(ok=False, message="motor rejected: running")
+                else:
+                    motor["fault"] = "NONE"
         elif cmd == "stop":
             self.sim_air_until = 0
             response["message"] = "air stopped"
@@ -214,11 +271,14 @@ class SensorReader(QtCore.QThread):
             try:
                 if not self.simulate:
                     connection = self.serial_factory(self.port, self.baud, timeout=0.1, write_timeout=0.5)
+                # Install handshake before exposing connected=True to the UI/test thread.
+                handshake = self.tracker.start({"cmd": "info"})
+                self.commands.put_nowait(handshake)
+                self.result(handshake)
                 self.connected = True
                 self.log("device_health", dict(kind="CONNECTED", port=self.port, simulate=self.simulate))
                 self.status.emit("SIMULATE" if self.simulate else f"CONNECTED {self.port}")
                 # Information query is the only automatic command. Actions are never replayed.
-                self.submit({"cmd": "info"})
                 while not self._stop.is_set():
                     self.result(self.tracker.timeout())
                     try:
@@ -229,7 +289,7 @@ class SensorReader(QtCore.QThread):
                         # A timed-out queued command must never execute later.
                         with self.tracker.lock:
                             valid = self.tracker.pending and self.tracker.pending["request_id"] == item["request_id"]
-                        if valid:
+                        if valid and not self._stop.is_set():
                             self.result(dict(item, phase="sent"))
                             if self.simulate:
                                 self._simulate_command(item["payload"])
@@ -257,6 +317,17 @@ class SensorReader(QtCore.QThread):
                                 self.logger.raw(bytes(buffered), now_iso(), time.monotonic())
                             buffered.clear()
                             raise ValueError("串口行超过16KB，已保留片段并断开")
+                    now = time.monotonic()
+                    if self.motor_lease_active and now-self.operator_alive < .75 and now-self.last_motor_lease >= .25:
+                        heartbeat = dict(cmd="motor_heartbeat", session_id=self.motor_session)
+                        if self.simulate:
+                            self.sim_motor["lease"] = now
+                        else:
+                            wire = (json.dumps(heartbeat, separators=(",", ":"))+"\n").encode()
+                            if connection.write(wire) != len(wire):
+                                raise OSError("滚筒心跳未完整发送")
+                        self.log("commands", dict(phase="lease", payload=heartbeat))
+                        self.last_motor_lease = now
             except Exception as exc:
                 self.log("device_health", dict(kind="CONNECTION_ERROR", error=str(exc)))
                 self.error.emit(str(exc))
@@ -264,6 +335,7 @@ class SensorReader(QtCore.QThread):
                 if buffered and self.logger:
                     self.logger.raw(bytes(buffered), now_iso(), time.monotonic())
                 self.connected = False
+                self.motor_lease_active = False
                 self.result(self.tracker.abort("连接已断开，命令不重放"))
                 self._clear_commands()
                 if connection:

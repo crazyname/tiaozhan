@@ -123,6 +123,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.last_frame_mono = 0.0
         self.m0: float | None = None
         self.camera = None
+        self.stop_after_motor = False
+        self.motor_stop_requested_at = 0
 
         self.time_buf: deque[float] = deque(maxlen=600)
         self.gas_buf = [deque(maxlen=600) for _ in range(4)]
@@ -265,6 +267,20 @@ class MainWindow(QtWidgets.QMainWindow):
         layout.insertLayout(3, commands)
         self.command_label = QtWidgets.QLabel("去皮/标定仅在批次外进行；气路状态是输出命令，不是阀位或流量反馈。")
         self.command_label.setWordWrap(True); layout.insertWidget(4, self.command_label)
+        motor = QtWidgets.QHBoxLayout()
+        self.motor_rpm = QtWidgets.QDoubleSpinBox(); self.motor_rpm.setRange(5, 30); self.motor_rpm.setValue(10); self.motor_rpm.setSuffix(" RPM")
+        self.motor_direction = QtWidgets.QComboBox(); self.motor_direction.addItem("正转", 1); self.motor_direction.addItem("反转", -1)
+        self.motor_duration = QtWidgets.QSpinBox(); self.motor_duration.setRange(1, 300); self.motor_duration.setValue(10); self.motor_duration.setSuffix(" 秒")
+        for widget in (self.motor_rpm, self.motor_direction, self.motor_duration):
+            motor.addWidget(widget)
+        self.motor_buttons = []
+        for title, cmd in [("人工启动滚筒", "motor"), ("停止滚筒", "motor_stop"), ("复位滚筒故障", "motor_reset")]:
+            button = QtWidgets.QPushButton(title)
+            button.clicked.connect(lambda checked=False, command=cmd: self.motor_command(command))
+            motor.addWidget(button); self.motor_buttons.append((button, cmd))
+        self.motor_status = QtWidgets.QLabel("滚筒未连接；需独立急停及防护互锁")
+        self.motor_status.setWordWrap(True); motor.addWidget(self.motor_status, 1)
+        layout.insertLayout(5, motor)
         photo = QtWidgets.QHBoxLayout()
         self.auto_photo = QtWidgets.QCheckBox("每30秒自动拍照，关键事件补拍")
         self.auto_photo.setChecked(True); photo.addWidget(self.auto_photo)
@@ -352,6 +368,12 @@ class MainWindow(QtWidgets.QMainWindow):
         except (ValueError, RuntimeError) as exc:
             self.on_error(str(exc))
 
+    def motor_command(self, cmd):
+        payload = dict(cmd=cmd)
+        if cmd == "motor":
+            payload.update(rpm=self.motor_rpm.value(), direction=self.motor_direction.currentData(), duration_ms=self.motor_duration.value()*1000)
+        self.send_command(payload)
+
     def on_command(self, record):
         phases = dict(queued="已排队", sent="已发送", running="执行中", completed="设备报告完成", accepted="已接受（不代表动作完成）", rejected="设备拒绝", unknown="结果未知，未重发")
         text = f"{record['payload']['cmd']}: {phases.get(record['phase'], record['phase'])}"
@@ -374,6 +396,7 @@ class MainWindow(QtWidgets.QMainWindow):
         except Exception as exc:
             self.on_error(f"开始失败: {exc}"); return
         self.finishing = False; self.shown_error = ""
+        self.stop_after_motor = False
         self.start_btn.setEnabled(False); self.stop_btn.setEnabled(True); self.connect_btn.setEnabled(False)
         for w in [self.batch_edit, self.operator_edit, self.metadata_button, self.camera_button, *self.meta_inputs.values()]:
             w.setEnabled(False)
@@ -382,6 +405,13 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def stop_session(self):
         if not self.logger.writer:
+            return
+        if not self.closing and self.logger.active and self.reader and (self.reader.motor_lease_active or self.reader.latest.get("motor_running")):
+            if not self.stop_after_motor:
+                self.stop_after_motor = True
+                self.motor_stop_requested_at = time.monotonic()
+                self.motor_command("motor_stop")
+                self.append_log("等待滚筒停止遥测后结束批次；失联时请检查硬件急停")
             return
         self.logger.stop(wait=False); self.finishing = True; self.stop_btn.setEnabled(False)
         self.append_log("正在排空数据和照片队列…")
@@ -443,6 +473,11 @@ class MainWindow(QtWidgets.QMainWindow):
         except (ValueError, TypeError) as exc:
             self.on_error(f"无效传感器帧: {exc}"); return
         self.last_frame_mono = received
+        if frame.get("motor_compiled"):
+            self.motor_status.setText(f"目标 {frame.get('shake_target_rpm')} RPM | 反馈 {frame.get('shake_actual_rpm')} RPM | 控制运行 {frame.get('motor_running')} | 故障 {frame.get('motor_fault')}")
+        if self.stop_after_motor and frame.get("motor_running") is False and finite_number(frame.get("shake_actual_rpm")) and abs(frame["shake_actual_rpm"]) < 1:
+            self.stop_after_motor = False
+            self.stop_session()
         self.seq_label.setText(f"seq: {frame['seq']} · {row['quality_flag']}")
         mass = frame.get("mass_g")
         self.mass_label.setText(f"质量: {mass:.2f} g" if finite_number(mass) else "质量: -- g")
@@ -458,6 +493,12 @@ class MainWindow(QtWidgets.QMainWindow):
             self.curves[i].setData(list(self.time_buf), list(self.gas_buf[i]))
 
     def health_check(self):
+        if self.reader:
+            self.reader.operator_alive = time.monotonic()
+        if self.stop_after_motor and time.monotonic()-self.motor_stop_requested_at > 5:
+            self.stop_after_motor = False
+            self.logger.writer.fail("滚筒停止后5秒内未取得静止遥测，请检查硬件；批次标为未完成")
+            self.logger.stop(wait=False); self.finishing = True; self.stop_btn.setEnabled(False)
         failure = self.logger.error or self.logger.journal.error
         if failure and failure != self.shown_error:
             self.shown_error = failure; self.on_error(failure)
@@ -479,6 +520,9 @@ class MainWindow(QtWidgets.QMainWindow):
             self.port_edit.setEnabled(True); self.sim_check.setEnabled(True)
         connected = bool(self.reader and self.reader.connected)
         pending = self.reader.tracker.pending if self.reader else None
+        capable = connected and self.reader.latest.get("motor_compiled") and time.monotonic()-self.reader.latest_received < 3
+        for button, cmd in self.motor_buttons:
+            button.setEnabled(bool(connected if cmd == "motor_stop" else capable and not pending))
         for button, cmd in self.command_buttons:
             button.setEnabled(connected and (cmd == "stop" or not pending) and (cmd not in ("tare", "calibrate") or not (self.logger.active or self.finishing)))
         if connected and time.monotonic()-self.last_frame_mono > 3:

@@ -196,6 +196,7 @@ class SessionLogger:
         self.last_seq = None
         self.m0 = None
         self.last_device = None
+        self.last_motor = None
         self.latest_label = None
         self.event_ids = set()
         self.journal = DiagnosticJournal(self.data_root.parent / "device_logs")
@@ -232,6 +233,7 @@ class SessionLogger:
             self.token = uuid.uuid4().hex
             self.event_id = self.pending_images = 0
             self.last_seq = self.m0 = self.last_device = self.latest_label = None
+            self.last_motor = None
             self.event_ids = set()
             self.stopping = False
             provenance = {"host_git_commit": None, "host_worktree_dirty": None}
@@ -294,6 +296,14 @@ class SessionLogger:
             if self.last_seq is not None and frame["seq"] <= self.last_seq:
                 self.log("device_health", dict(kind="DEVICE_RESET_OR_REORDER", previous=self.last_seq, seq=frame["seq"]))
             self.last_seq = frame["seq"]
+            if frame.get("motor_compiled"):
+                motor_state = (frame.get("motor_running"), frame.get("motor_fault"))
+                if motor_state != self.last_motor:
+                    details = {key: frame.get(key) for key in ("motor_running", "motor_fault", "shake_target_rpm", "shake_actual_rpm", "shake_direction", "shake_start_time", "shake_end_time", "shake_duration_s")}
+                    self.log("device_health", dict(kind="MOTOR_STATE", values=details))
+                    if motor_state[0] or (self.last_motor and self.last_motor[0]):
+                        self.event("MOTOR_START" if motor_state[0] else "MOTOR_END", json.dumps(details, ensure_ascii=False), "controller telemetry, inspect actual RPM")
+                    self.last_motor = motor_state
             mass = frame.get("mass_g")
             if self.m0 is None and finite_number(mass) and mass > 0:
                 self.m0 = float(mass)
