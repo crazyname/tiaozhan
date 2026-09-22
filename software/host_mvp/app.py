@@ -233,6 +233,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.batch_metadata = normalize_metadata()
         self.metadata_button = QtWidgets.QPushButton("批次 / 标定 / SOP 档案")
         self.metadata_button.clicked.connect(self.edit_metadata); metadata.addWidget(self.metadata_button)
+        self.replay_button = QtWidgets.QPushButton("历史回放 / 对比")
+        self.replay_button.clicked.connect(self.open_replay); metadata.addWidget(self.replay_button)
         layout.insertLayout(2, metadata)
         commands = QtWidgets.QHBoxLayout()
         self.command_buttons = []
@@ -285,6 +287,12 @@ class MainWindow(QtWidgets.QMainWindow):
             self.batch_metadata = dialog.values()
             for key, entry in self.meta_inputs.items():
                 entry.setText(self.batch_metadata[key] or "")
+
+    def open_replay(self):
+        from replay_ui import ReplayWindow
+        if not getattr(self, "replay_window", None):
+            self.replay_window = ReplayWindow(self)
+        self.replay_window.show(); self.replay_window.raise_()
 
     def toggle_connection(self):
         if self.reader and self.reader.isRunning():
@@ -454,6 +462,13 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.close()
 
     def closeEvent(self, event):
+        replay = getattr(self, "replay_window", None)
+        if replay and replay.loader and replay.loader.isRunning():
+            self.append_log("历史批次正在读取，完成后可退出")
+            event.ignore()
+            return
+        if replay:
+            replay.close()
         if not self.closing:
             self.closing = True; self.stop_session()
             if self.reader:
