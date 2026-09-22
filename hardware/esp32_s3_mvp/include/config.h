@@ -5,8 +5,12 @@
 namespace cfg {
 #ifdef QY_WOKWI_SIM
 constexpr char Hardware[] = "QY-WOKWI-SIM";
+constexpr char SourceMode[] = "simulation";
+constexpr char ReadyMessage[] = "QY-FW-0.4.0 Wokwi functional simulation ready; outputs initially OFF";
 #else
 constexpr char Hardware[] = "QY-HW-0.2-N8R8";
+constexpr char SourceMode[] = "hardware";
+constexpr char ReadyMessage[] = "QY-FW-0.4.0 hardware acquisition ready; outputs initially OFF";
 #endif
 constexpr char Firmware[] = "QY-FW-0.4.0";
 constexpr int Sda = 8, Scl = 9;
