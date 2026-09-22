@@ -4,7 +4,7 @@
 // Hardware contract HW-v0.2: ESP32-S3-DevKitC-1 / WROOM-1 N8R8.
 namespace cfg {
 constexpr char Hardware[] = "QY-HW-0.2-N8R8";
-constexpr char Firmware[] = "QY-FW-0.3.0";
+constexpr char Firmware[] = "QY-FW-0.4.0";
 constexpr int Sda = 8, Scl = 9;
 constexpr int HxData = 4, HxClock = 5;
 constexpr int AirEnable = 6; // LOW only when physical enable switch is closed.
