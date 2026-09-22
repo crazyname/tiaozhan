@@ -9,6 +9,8 @@ import shutil
 from collections import Counter
 from datetime import datetime
 from pathlib import Path
+import yaml
+from metadata import METADATA_VERSION, metadata_digest
 
 
 def audit_session(root: Path) -> str:
@@ -29,6 +31,14 @@ def audit_session(root: Path) -> str:
     previous: dict[str, float] = {}
     if not (root / "meta.yaml").is_file() or not (root / "meta.yaml").stat().st_size:
         issues["meta.yaml 缺失或为空"] += 1
+    else:
+        try:
+            meta = yaml.safe_load((root / "meta.yaml").read_text(encoding="utf-8"))
+            if isinstance(meta, dict) and meta.get("metadata_schema") == METADATA_VERSION:
+                if meta.get("operator_metadata_sha256") != metadata_digest(meta.get("operator_metadata")):
+                    issues["批次档案快照校验不一致"] += 1
+        except (OSError, ValueError, TypeError, yaml.YAMLError):
+            issues["批次档案无法解析"] += 1
     required = ["seq", "host_monotonic_s", "mcu_t_ms", "mass_g",
                 "chamber_rh_pct", "ambient_rh_pct", "chamber_temp_c",
                 "ambient_temp_c", "leaf_temp_c", "bme688_gas_ohm"]
