@@ -1,0 +1,173 @@
+{
+  "version": 1,
+  "author": "EnzeWang / QingYun Control",
+  "editor": "wokwi",
+  "parts": [
+    {
+      "type": "board-esp32-s3-devkitc-1",
+      "id": "esp",
+      "top": 20,
+      "left": 20,
+      "attrs": {
+        "flashSize": "8",
+        "psramSize": "8",
+        "psramType": "octal",
+        "serialInterface": "USB_SERIAL_JTAG"
+      }
+    },
+    {
+      "type": "wokwi-hx711",
+      "id": "hx711",
+      "top": 20,
+      "left": 430,
+      "attrs": {
+        "type": "5kg"
+      }
+    },
+    {
+      "type": "wokwi-slide-switch",
+      "id": "swAir",
+      "top": 330,
+      "left": 420,
+      "attrs": {
+        "value": "",
+        "bounce": "0",
+        "label": "Air Enable"
+      }
+    },
+    {
+      "type": "wokwi-slide-switch",
+      "id": "swMotorEnable",
+      "top": 405,
+      "left": 420,
+      "attrs": {
+        "value": "",
+        "bounce": "0",
+        "label": "Motor Enable"
+      }
+    },
+    {
+      "type": "wokwi-slide-switch",
+      "id": "swMotorGuard",
+      "top": 480,
+      "left": 420,
+      "attrs": {
+        "value": "",
+        "bounce": "0",
+        "label": "Motor Guard"
+      }
+    },
+    {
+      "type": "wokwi-slide-switch",
+      "id": "swMotorFault",
+      "top": 555,
+      "left": 420,
+      "attrs": {
+        "value": "",
+        "bounce": "0",
+        "label": "Driver Healthy/Fault"
+      }
+    },
+    {
+      "type": "wokwi-led",
+      "id": "ledPump",
+      "top": 330,
+      "left": 720,
+      "attrs": {
+        "color": "red",
+        "label": "Pump GPIO16"
+      }
+    },
+    {
+      "type": "wokwi-led",
+      "id": "ledSample",
+      "top": 395,
+      "left": 720,
+      "attrs": {
+        "color": "green",
+        "label": "Sample Valve GPIO17"
+      }
+    },
+    {
+      "type": "wokwi-led",
+      "id": "ledPurge",
+      "top": 460,
+      "left": 720,
+      "attrs": {
+        "color": "blue",
+        "label": "Purge Valve GPIO18"
+      }
+    },
+    {
+      "type": "wokwi-led",
+      "id": "ledMotorPwm",
+      "top": 525,
+      "left": 720,
+      "attrs": {
+        "color": "orange",
+        "label": "Motor PWM GPIO10"
+      }
+    },
+    {
+      "type": "wokwi-led",
+      "id": "ledMotorDir",
+      "top": 590,
+      "left": 720,
+      "attrs": {
+        "color": "cyan",
+        "label": "Motor DIR GPIO11"
+      }
+    },
+    {
+      "type": "wokwi-led",
+      "id": "ledMotorSleep",
+      "top": 655,
+      "left": 720,
+      "attrs": {
+        "color": "yellow",
+        "label": "Motor SLEEP GPIO12"
+      }
+    }
+  ],
+  "connections": [
+    ["hx711:VCC", "esp:5V", "red", []],
+    ["hx711:GND", "esp:GND.1", "black", []],
+    ["hx711:DT", "esp:4", "green", []],
+    ["hx711:SCK", "esp:5", "blue", []],
+
+    ["swAir:2", "esp:6", "green", []],
+    ["swAir:1", "esp:GND.1", "black", []],
+    ["swAir:3", "esp:3V3", "red", []],
+
+    ["swMotorEnable:2", "esp:7", "green", []],
+    ["swMotorEnable:1", "esp:GND.1", "black", []],
+    ["swMotorEnable:3", "esp:3V3", "red", []],
+
+    ["swMotorGuard:2", "esp:21", "green", []],
+    ["swMotorGuard:1", "esp:GND.1", "black", []],
+    ["swMotorGuard:3", "esp:3V3", "red", []],
+
+    ["swMotorFault:2", "esp:15", "green", []],
+    ["swMotorFault:1", "esp:3V3", "red", []],
+    ["swMotorFault:3", "esp:GND.1", "black", []],
+
+    ["ledPump:A", "esp:16", "red", []],
+    ["ledPump:C", "esp:GND.1", "black", []],
+    ["ledSample:A", "esp:17", "green", []],
+    ["ledSample:C", "esp:GND.1", "black", []],
+    ["ledPurge:A", "esp:18", "blue", []],
+    ["ledPurge:C", "esp:GND.1", "black", []],
+    ["ledMotorPwm:A", "esp:10", "orange", []],
+    ["ledMotorPwm:C", "esp:GND.1", "black", []],
+    ["ledMotorDir:A", "esp:11", "cyan", []],
+    ["ledMotorDir:C", "esp:GND.1", "black", []],
+    ["ledMotorSleep:A", "esp:12", "yellow", []],
+    ["ledMotorSleep:C", "esp:GND.1", "black", []]
+  ],
+  "serialMonitor": {
+    "display": "terminal",
+    "newline": "lf",
+    "convertEol": true
+  },
+  "dependencies": {}
+}
