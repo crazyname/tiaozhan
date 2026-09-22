@@ -12,6 +12,7 @@ from device import SensorReader
 from labels import SCALE_VERSION, STAGES, ACTIONS, SCORES
 from schema import HOST_VERSION, SENSOR_FIELDS, EVENT_FIELDS, now_iso, default_batch_id, finite_number
 from storage import SessionLogger as BaseSessionLogger
+from metadata import TEXT_FIELDS, normalize_metadata, load_profile, save_profile
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DATA_ROOT = REPO_ROOT / "data" / "raw"
@@ -19,6 +20,60 @@ DATA_ROOT = REPO_ROOT / "data" / "raw"
 class SessionLogger(BaseSessionLogger):
     def __init__(self):
         super().__init__(DATA_ROOT)
+
+
+class MetadataDialog(QtWidgets.QDialog):
+    def __init__(self, values, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("批次档案 · 未知留空；保存新版本，不覆盖历史")
+        self.resize(700, 630)
+        outer = QtWidgets.QVBoxLayout(self)
+        scroll = QtWidgets.QScrollArea(); scroll.setWidgetResizable(True)
+        content = QtWidgets.QWidget(); form = QtWidgets.QFormLayout(content)
+        self.inputs = {}
+        for key, name in {**TEXT_FIELDS, "initial_mass_g": "初始装料质量（g，空白则采用首个有效称重）"}.items():
+            entry = QtWidgets.QLineEdit()
+            entry.setText(str(values[key]) if values.get(key) is not None else "")
+            self.inputs[key] = entry; form.addRow(name, entry)
+        scroll.setWidget(content); outer.addWidget(scroll)
+        self.error = QtWidgets.QLabel(); self.error.setWordWrap(True); outer.addWidget(self.error)
+        actions = QtWidgets.QHBoxLayout()
+        for text, callback in [("载入档案", self.load), ("另存新档案", self.save), ("应用到本批次", self.apply)]:
+            button = QtWidgets.QPushButton(text); button.clicked.connect(callback); actions.addWidget(button)
+        outer.addLayout(actions)
+
+    def values(self):
+        return normalize_metadata({key: entry.text() for key, entry in self.inputs.items()})
+
+    def apply(self):
+        try:
+            self.values()
+            self.accept()
+        except ValueError as exc:
+            self.error.setText(str(exc))
+
+    def load(self):
+        path, _ = QtWidgets.QFileDialog.getOpenFileName(self, "载入档案", "", "JSON (*.json)")
+        if path:
+            try:
+                values = load_profile(path)
+                # Loaded mass belongs to the old batch and must be explicitly re-entered.
+                values["initial_mass_g"] = None
+                for key, entry in self.inputs.items():
+                    entry.setText(str(values[key]) if values[key] is not None else "")
+                self.error.setText("已载入；初始装料质量已清空，请按本批次确认。")
+            except (OSError, ValueError) as exc:
+                self.error.setText(str(exc))
+
+    def save(self):
+        try:
+            values = self.values()
+            path, _ = QtWidgets.QFileDialog.getSaveFileName(self, "保存新版本（文件须不存在）", "", "JSON (*.json)")
+            if path:
+                save_profile(path, values)
+                self.error.setText("档案已保存；开始批次时另存完整快照。")
+        except (OSError, ValueError) as exc:
+            self.error.setText(str(exc))
 
 class LabelDialog(QtWidgets.QDialog):
     def __init__(self, parent, previous=None):
@@ -166,7 +221,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
 
     def setup_extensions(self, layout):
-        self.setWindowTitle("青韵智控 · 采集工作台 v0.3")
+        self.setWindowTitle(f"青韵智控 · 采集工作台 {HOST_VERSION}")
         self.resize(1220, 880)
         self.sim_check.setText("模拟传感器与图像（非实验数据）")
         self.operator_edit.clear(); self.operator_edit.setPlaceholderText("操作员，未知可空")
@@ -175,6 +230,9 @@ class MainWindow(QtWidgets.QMainWindow):
         for key, name in [("cultivar", "品种"), ("origin", "产地"), ("protocol_id", "实验方案编号")]:
             entry = QtWidgets.QLineEdit(); entry.setPlaceholderText(name + "（未知可空）")
             self.meta_inputs[key] = entry; metadata.addWidget(entry)
+        self.batch_metadata = normalize_metadata()
+        self.metadata_button = QtWidgets.QPushButton("批次 / 标定 / SOP 档案")
+        self.metadata_button.clicked.connect(self.edit_metadata); metadata.addWidget(self.metadata_button)
         layout.insertLayout(2, metadata)
         commands = QtWidgets.QHBoxLayout()
         self.command_buttons = []
@@ -217,6 +275,16 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def append_log(self, text):
         self.log.appendPlainText(f"[{datetime.now():%H:%M:%S}] {text}")
+
+    def edit_metadata(self):
+        if self.logger.active or self.finishing:
+            return
+        values = dict(self.batch_metadata, **{k: w.text() for k, w in self.meta_inputs.items()})
+        dialog = MetadataDialog(values, self)
+        if dialog.exec() == QtWidgets.QDialog.Accepted:
+            self.batch_metadata = dialog.values()
+            for key, entry in self.meta_inputs.items():
+                entry.setText(self.batch_metadata[key] or "")
 
     def toggle_connection(self):
         if self.reader and self.reader.isRunning():
@@ -265,12 +333,12 @@ class MainWindow(QtWidgets.QMainWindow):
             if self.reader.tracker.pending or "CALIBRATING" in str(self.reader.latest.get("quality_flag", "")):
                 raise RuntimeError("请等待设备命令或标定完成")
             root = self.logger.start(self.batch_edit.text(), self.operator_edit.text(), "simulate" if self.reader.simulate else "serial",
-                                     {k: w.text().strip() or None for k, w in self.meta_inputs.items()})
+                                     dict(self.batch_metadata, **{k: w.text().strip() or None for k, w in self.meta_inputs.items()}))
         except Exception as exc:
             self.on_error(f"开始失败: {exc}"); return
         self.finishing = False; self.shown_error = ""
         self.start_btn.setEnabled(False); self.stop_btn.setEnabled(True); self.connect_btn.setEnabled(False)
-        for w in [self.batch_edit, self.operator_edit, *self.meta_inputs.values()]:
+        for w in [self.batch_edit, self.operator_edit, self.metadata_button, *self.meta_inputs.values()]:
             w.setEnabled(False)
         self.loss_label.setText("失水率: --")
         self.append_log(f"批次开始: {root}"); self.photo_timer.start(30000); self.auto_snapshot()
@@ -362,7 +430,8 @@ class MainWindow(QtWidgets.QMainWindow):
             self.finishing = False
             self.append_log(f"批次收尾完成: {self.logger.writer.report}；错误: {self.logger.error or '无'}")
             self.start_btn.setEnabled(True); self.connect_btn.setEnabled(True)
-            for w in [self.batch_edit, self.operator_edit, *self.meta_inputs.values()]:
+            self.batch_metadata["initial_mass_g"] = None
+            for w in [self.batch_edit, self.operator_edit, self.metadata_button, *self.meta_inputs.values()]:
                 w.setEnabled(True)
             self.batch_edit.setText(default_batch_id())
         if self.disconnecting and self.reader and not self.reader.isRunning():

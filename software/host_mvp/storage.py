@@ -18,6 +18,7 @@ import yaml
 from labels import LABEL_FIELDS, SCALE_VERSION, validate_label
 from schema import HOST_VERSION, SENSOR_FIELDS, EVENT_FIELDS, IMAGE_FIELDS, now_iso, default_batch_id, sensor_row, finite_number
 from session_check import write_session_check
+from metadata import METADATA_VERSION, normalize_metadata, metadata_digest
 
 TABLES = {"sensor_1hz": SENSOR_FIELDS, "events": EVENT_FIELDS, "image_index": IMAGE_FIELDS, "master_labels": LABEL_FIELDS}
 
@@ -198,6 +199,7 @@ class SessionLogger:
         return True
 
     def start(self, batch_id, operator, mode, metadata=None):
+        metadata = normalize_metadata(metadata)
         with self.lock:
             if self.active or not self.finished or self.pending_images:
                 raise RuntimeError("上一批次尚未结束")
@@ -227,11 +229,17 @@ class SessionLogger:
                         host_software_version=HOST_VERSION, **provenance,
                         source_mode="simulate" if mode == "simulate" else "serial_unverified", transport=mode,
                         firmware_version=None, hardware_version=None, device_id=None, calibration_version=None,
-                        sensor_model_and_batch=None, experiment_protocol_version=None, picking_conditions=None,
-                        label_scale_version=SCALE_VERSION, **(metadata or {}))
+                        label_scale_version=SCALE_VERSION)
+            meta.update(metadata)
+            meta.update(metadata_schema=METADATA_VERSION, operator_metadata=copy.deepcopy(metadata),
+                        operator_metadata_sha256=metadata_digest(metadata),
+                        initial_mass_source="operator" if metadata["initial_mass_g"] is not None else None)
+            self.m0 = metadata["initial_mass_g"]
             self.writer = BatchWriter(root, meta, self.queue_capacity)
             self.active = True
             self.event("SESSION_START", note="session started")
+            if self.m0 is not None:
+                self.event("T0_INITIAL", str(self.m0), "operator supplied initial loaded mass")
             return root
 
     def event(self, event_type, event_value="", note=""):
@@ -271,10 +279,12 @@ class SessionLogger:
             if self.m0 is None and finite_number(mass) and mass > 0:
                 self.m0 = float(mass)
                 self.event("T0_INITIAL", str(self.m0), "first positive finite mass")
-                self._submit("meta", dict(initial_mass_g=self.m0))
+                self._submit("meta", dict(initial_mass_g=self.m0, initial_mass_source="first_positive_measurement"))
             device = {key: frame.get(key) for key in ("firmware", "hardware", "device_id", "source_mode", "hx_offset", "hx_counts_per_g")}
             if device != self.last_device:
                 self.log("device_health", dict(kind="DEVICE_CONFIGURATION", values=device))
+                if self.last_device is None:
+                    self._submit("meta", dict(initial_device_configuration=device))
                 self._submit("meta", dict(firmware_version=device["firmware"], hardware_version=device["hardware"],
                                            device_id=device["device_id"], device_configuration=device,
                                            source_mode=device["source_mode"] or ("simulate" if self.writer.meta.get("transport") == "simulate" else "serial_unverified")))

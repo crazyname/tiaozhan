@@ -97,17 +97,24 @@ class DesktopTests(unittest.TestCase):
                 QTest.qWait(20)
                 time.sleep(.01)
             window.batch_edit.setText("BATCH_THREAD")
+            window.batch_metadata["initial_mass_g"] = 1000
             window.start_session()
             self.assertTrue(window.logger.active)
+            self.assertFalse(window.metadata_button.isEnabled())
             self.assertFalse(window.sim_check.isEnabled())
             self.assertFalse(window.connect_btn.isEnabled())
             QTest.qWait(2200)
             self.stop_and_wait(window)
+            self.assertTrue(window.metadata_button.isEnabled())
+            self.assertIsNone(window.batch_metadata["initial_mass_g"])
             self.assertTrue(window.connect_btn.isEnabled())
             report = (self.root / "BATCH_THREAD" / "session_check.txt").read_text(encoding="utf-8")
             self.assertIn("基础检查通过", report)
             window.toggle_connection()
-            QTest.qWait(200)
+            deadline = time.monotonic() + 4
+            while window.reader is not None and time.monotonic() < deadline:
+                QTest.qWait(20)
+                time.sleep(.01)
             self.assertIsNone(window.reader)
             self.assertTrue(window.sim_check.isEnabled())
         finally:
