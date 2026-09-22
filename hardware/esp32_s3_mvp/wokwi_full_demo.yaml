@@ -1,0 +1,50 @@
+name: QingYun full-system functional demo
+version: 1
+author: EnzeWang
+steps:
+  - delay: 2s
+
+  - write-serial: "{\"cmd\":\"info\"}\n"
+  - delay: 500ms
+
+  - set-control:
+      part-id: hx711
+      control: load
+      value: 0
+  - delay: 500ms
+  - write-serial: "{\"cmd\":\"tare\"}\n"
+  - wait-serial: "calibration saved in NVS"
+
+  - set-control:
+      part-id: hx711
+      control: load
+      value: 1.0
+  - delay: 500ms
+  - write-serial: "{\"cmd\":\"calibrate\",\"grams\":1000}\n"
+  - wait-serial: "calibration saved in NVS"
+
+  - set-control:
+      part-id: hx711
+      control: load
+      value: 0.5
+  - delay: 2s
+
+  - write-serial: "{\"cmd\":\"air\",\"mode\":\"sample\",\"duration_ms\":3000}\n"
+  - wait-serial: "timed air command accepted"
+  - delay: 4s
+
+  - write-serial: "{\"cmd\":\"motor\",\"rpm\":15.0,\"direction\":1,\"duration_ms\":3000,\"session_id\":\"0123456789abcdef0123456789abcdef\",\"request_id\":\"wokwi-demo\"}\n"
+  - wait-serial: "motor command accepted"
+  - delay: 400ms
+  - write-serial: "{\"cmd\":\"motor_heartbeat\",\"session_id\":\"0123456789abcdef0123456789abcdef\"}\n"
+  - delay: 500ms
+  - write-serial: "{\"cmd\":\"motor_heartbeat\",\"session_id\":\"0123456789abcdef0123456789abcdef\"}\n"
+  - delay: 500ms
+  - write-serial: "{\"cmd\":\"motor_heartbeat\",\"session_id\":\"0123456789abcdef0123456789abcdef\"}\n"
+  - delay: 500ms
+  - write-serial: "{\"cmd\":\"motor_heartbeat\",\"session_id\":\"0123456789abcdef0123456789abcdef\"}\n"
+  - delay: 500ms
+  - write-serial: "{\"cmd\":\"motor_heartbeat\",\"session_id\":\"0123456789abcdef0123456789abcdef\"}\n"
+  - delay: 500ms
+  - write-serial: "{\"cmd\":\"motor_heartbeat\",\"session_id\":\"0123456789abcdef0123456789abcdef\"}\n"
+  - delay: 1s
