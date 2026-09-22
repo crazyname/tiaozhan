@@ -3,7 +3,11 @@
 
 // Hardware contract HW-v0.2: ESP32-S3-DevKitC-1 / WROOM-1 N8R8.
 namespace cfg {
+#ifdef QY_WOKWI_SIM
+constexpr char Hardware[] = "QY-WOKWI-SIM";
+#else
 constexpr char Hardware[] = "QY-HW-0.2-N8R8";
+#endif
 constexpr char Firmware[] = "QY-FW-0.4.0";
 constexpr int Sda = 8, Scl = 9;
 constexpr int HxData = 4, HxClock = 5;
@@ -28,7 +32,11 @@ constexpr bool AuxEnabled = false; // ADS #2 provisioned, not required for MVP.
 constexpr float AdsLsbV = 4.096f / 32768.0f;
 constexpr float GasDivider = 2.0f; // Buffered 10k/10k divider, see wiring document.
 constexpr uint32_t FrameMs = 1000;
+#ifdef QY_WOKWI_SIM
+constexpr uint32_t WarmupMs = 5000; // Simulation-only: keep demos short; not a hardware claim.
+#else
 constexpr uint32_t WarmupMs = 20UL * 60 * 1000; // Engineering marker, NOT proof of conditioning.
+#endif
 constexpr uint16_t BmeHeaterC = 320, BmeHeaterMs = 150;
 constexpr uint32_t HxFreshMs = 1500;
 constexpr uint32_t CalibrationSamples = 20, CalibrationTimeoutMs = 10000;
