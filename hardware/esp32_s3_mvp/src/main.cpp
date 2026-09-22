@@ -143,7 +143,7 @@ void command(const char *line) {
         StaticJsonDocument<1536> out;
         out["type"] = "status"; out["message"] = "firmware configuration";
         out["firmware"] = cfg::Firmware; out["hardware"] = cfg::Hardware;
-        out["source_mode"] = "hardware"; out["air_compiled"] = cfg::AirCompiled;
+        out["source_mode"] = cfg::SourceMode; out["air_compiled"] = cfg::AirCompiled;
         out["air_enable"] = digitalRead(cfg::AirEnable) == LOW;
         out["motor_compiled"] = motorReady(); out["motor_interlock"] = motorInterlocked();
         out["offset_known"] = offsetKnown;
@@ -207,7 +207,7 @@ void publish() {
     out["type"] = "sensor"; out["seq"] = sequence++;
     out["t_ms"] = static_cast<uint64_t>(esp_timer_get_time() / 1000);
     out["firmware"] = cfg::Firmware; out["hardware"] = cfg::Hardware;
-    out["protocol"] = "JSONL-v0.3"; out["source_mode"] = "hardware";
+    out["protocol"] = "JSONL-v0.3"; out["source_mode"] = cfg::SourceMode;
     const String deviceId = String(static_cast<uint32_t>(ESP.getEfuseMac() >> 32), HEX) + String(static_cast<uint32_t>(ESP.getEfuseMac()), HEX);
     out["device_id"] = deviceId;
     auto errors = out.createNestedArray("errors");
@@ -301,7 +301,7 @@ void setup() {
             calibration = saved; offsetKnown = true;
         }
     }
-    status("QY-FW-0.3.0 hardware acquisition ready; outputs initially OFF");
+    status(cfg::ReadyMessage);
     if (!airTaskReady) status("air safety task unavailable; air commands disabled", false);
     if (!storageReady) status("NVS unavailable; calibration disabled", false);
 }
