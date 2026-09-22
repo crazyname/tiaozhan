@@ -21,6 +21,54 @@ class Loader(QtCore.QThread):
             self.failed.emit(str(exc))
 
 
+class ReportWorker(QtCore.QThread):
+    saved = QtCore.Signal(str)
+    failed = QtCore.Signal(str)
+
+    def __init__(self, roots, output, params, parent=None):
+        super().__init__(parent)
+        self.roots, self.output, self.params = roots, output, params
+
+    def run(self):
+        from analysis import export_report
+        try:
+            self.saved.emit(str(export_report(self.roots, self.output, self.params)))
+        except Exception as exc:
+            self.failed.emit(str(exc))
+
+
+class ReportDialog(QtWidgets.QDialog):
+    def __init__(self, field, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("分析参数 · 所有已添加批次（按批次起点）")
+        layout = QtWidgets.QFormLayout(self)
+        self.windows = []
+        for title, value in [("基线起（秒）", 0), ("基线止（秒）", 60), ("稳定起（秒）", 60), ("稳定止（秒）", 120)]:
+            entry = QtWidgets.QDoubleSpinBox(); entry.setRange(0, 1e9); entry.setValue(value)
+            self.windows.append(entry); layout.addRow(title, entry)
+        self.field = QtWidgets.QComboBox()
+        for key, title in SERIES.items():
+            if key != "loss_pct":
+                self.field.addItem(title, key)
+        self.field.setCurrentIndex(max(0, self.field.findData(field))); layout.addRow("漂移指标", self.field)
+        self.group = QtWidgets.QLineEdit(); self.group.setPlaceholderText("仅确认相同重复实验条件后填写；未知留空")
+        layout.addRow("重复实验组", self.group)
+        self.error = QtWidgets.QLabel("半开区间；默认仅允许 OK / SERIAL_GAP；其他质量标记排除。")
+        self.error.setWordWrap(True); layout.addRow(self.error)
+        button = QtWidgets.QPushButton("选择导出目录")
+        button.clicked.connect(self.validate); layout.addRow(button)
+
+    def parameters(self):
+        from analysis import Parameters
+        return Parameters(*(entry.value() for entry in self.windows), field=self.field.currentData(), repeat_group=self.group.text().strip())
+
+    def validate(self):
+        try:
+            self.parameters().validate(); self.accept()
+        except ValueError as exc:
+            self.error.setText(str(exc))
+
+
 class ReplayWindow(QtWidgets.QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -28,11 +76,14 @@ class ReplayWindow(QtWidgets.QDialog):
         self.resize(1120, 800)
         self.batches = []
         self.loader = None
+        self.report_worker = None
         self.anchors = {}
         layout = QtWidgets.QVBoxLayout(self)
         controls = QtWidgets.QHBoxLayout()
         self.add = QtWidgets.QPushButton("添加批次")
         self.add.clicked.connect(self.choose)
+        self.export = QtWidgets.QPushButton("导出分析报告")
+        self.export.clicked.connect(self.export_analysis)
         self.active = QtWidgets.QComboBox()
         self.field = QtWidgets.QComboBox()
         for key, title in SERIES.items():
@@ -41,7 +92,7 @@ class ReplayWindow(QtWidgets.QDialog):
         self.align.addItem("按批次起点", None)
         self.occurrence = QtWidgets.QSpinBox(); self.occurrence.setRange(1, 999)
         self.occurrence.setPrefix("第 "); self.occurrence.setSuffix(" 次事件")
-        for widget in (self.add, self.active, self.field, self.align, self.occurrence):
+        for widget in (self.add, self.active, self.field, self.align, self.occurrence, self.export):
             controls.addWidget(widget)
         layout.addLayout(controls)
         self.plot = pg.PlotWidget()
@@ -88,6 +139,22 @@ class ReplayWindow(QtWidgets.QDialog):
         path = QtWidgets.QFileDialog.getExistingDirectory(self, "选择含 meta.yaml 的批次目录")
         if path:
             self.load_path(path)
+
+    def export_analysis(self):
+        if not self.batches or (self.report_worker and self.report_worker.isRunning()):
+            self.warnings.setPlainText("请先添加批次，或等待当前报告完成")
+            return
+        dialog = ReportDialog(self.field.currentData(), self)
+        if dialog.exec() != QtWidgets.QDialog.Accepted:
+            return
+        output = QtWidgets.QFileDialog.getExistingDirectory(self, "选择原始批次之外的报告父目录")
+        if output:
+            self.export.setEnabled(False)
+            self.report_worker = ReportWorker([batch.root for batch in self.batches], output, dialog.parameters(), self)
+            self.report_worker.saved.connect(lambda path: self.warnings.setPlainText("报告已保存（report.html / report.json / curves.csv / curves.png）：\n" + path))
+            self.report_worker.failed.connect(self.warnings.setPlainText)
+            self.report_worker.finished.connect(lambda: self.export.setEnabled(True))
+            self.report_worker.start()
 
     def load_path(self, path):
         if self.loader and self.loader.isRunning():
@@ -201,8 +268,11 @@ class ReplayWindow(QtWidgets.QDialog):
             self.timer.stop(); self.play.setText("播放")
 
     def closeEvent(self, event):
-        if self.loader and self.loader.isRunning():
-            self.warnings.setPlainText("正在读取批次，请读取完成后关闭")
+        if self.busy():
+            self.warnings.setPlainText("正在读取批次或导出报告，请完成后关闭")
             event.ignore()
         else:
             self.timer.stop(); event.accept()
+
+    def busy(self):
+        return bool((self.loader and self.loader.isRunning()) or (self.report_worker and self.report_worker.isRunning()))

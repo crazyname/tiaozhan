@@ -4,7 +4,7 @@ import json
 import math
 from datetime import datetime, timezone
 
-HOST_VERSION = "host_mvp-v0.5.0"
+HOST_VERSION = "host_mvp-v0.6.0"
 SENSOR_FIELDS = ["batch_id", "seq", "datetime_iso", "host_monotonic_s", "mcu_t_ms"]
 SENSOR_FIELDS += [f"gas_{i}_adc" for i in range(1, 5)] + [f"gas_{i}_v" for i in range(1, 5)]
 SENSOR_FIELDS += ["bme688_gas_ohm", "chamber_temp_c", "chamber_rh_pct", "ambient_temp_c",
