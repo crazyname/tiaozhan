@@ -3,6 +3,9 @@
 #include <cstring>
 #include "config.h"
 #include "motor.h"
+#ifdef QY_WOKWI_SIM
+#include "sim_profile.h"
+#endif
 
 namespace {
 portMUX_TYPE mux = portMUX_INITIALIZER_UNLOCKED;
@@ -39,8 +42,12 @@ void task(void*) {
         const auto now = nowMs();
         portENTER_CRITICAL(&mux);
         if (now-lastMeasure >= 100) {
+#ifdef QY_WOKWI_SIM
+            rpm = qy_sim::motorRpm(policy.duty, policy.direction, now);
+#else
             const int32_t ticks = encoderCount; encoderCount = 0;
             rpm = ticks * 60000.0f / (cfg::EncoderCountsPerOutputTurn * (now-lastMeasure));
+#endif
             lastMeasure = now;
         }
         policy.tick(now, enabled(), healthy(), now-mainTick < 1500, rpm);
@@ -61,8 +68,10 @@ void motorBegin() {
     pinMode(cfg::EncoderA, INPUT); pinMode(cfg::EncoderB, INPUT);
     encoderPrevious = (digitalRead(cfg::EncoderA) ? 2 : 0) | (digitalRead(cfg::EncoderB) ? 1 : 0);
     ledcSetup(PwmChannel, 20000, 10); ledcAttachPin(cfg::MotorPwm, PwmChannel); ledcWrite(PwmChannel, 0);
+#ifndef QY_WOKWI_SIM
     attachInterrupt(digitalPinToInterrupt(cfg::EncoderA), encoderISR, CHANGE);
     attachInterrupt(digitalPinToInterrupt(cfg::EncoderB), encoderISR, CHANGE);
+#endif
     mainTick = nowMs();
     taskReady = xTaskCreatePinnedToCore(task, "motor-watchdog", 3072, nullptr, 4, nullptr, 0) == pdPASS;
 }
