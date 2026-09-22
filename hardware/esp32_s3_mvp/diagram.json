@@ -31,8 +31,7 @@
       "left": 420,
       "attrs": {
         "value": "",
-        "bounce": "0",
-        "label": "Air Enable"
+        "bounce": "0"
       }
     },
     {
@@ -42,8 +41,7 @@
       "left": 420,
       "attrs": {
         "value": "",
-        "bounce": "0",
-        "label": "Motor Enable"
+        "bounce": "0"
       }
     },
     {
@@ -53,8 +51,7 @@
       "left": 420,
       "attrs": {
         "value": "",
-        "bounce": "0",
-        "label": "Motor Guard"
+        "bounce": "0"
       }
     },
     {
@@ -64,8 +61,7 @@
       "left": 420,
       "attrs": {
         "value": "",
-        "bounce": "0",
-        "label": "Driver Healthy/Fault"
+        "bounce": "0"
       }
     },
     {
