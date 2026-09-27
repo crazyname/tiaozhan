@@ -199,8 +199,10 @@ void pollCommands() {
         else overflow = true;
     }
 }
-void number(JsonVariant target, float value) {
-    if (isfinite(value)) target.set(value); else target.set(nullptr);
+template <typename T>
+void number(T target, float value) {
+    if (isfinite(value)) target = value;
+    else target = nullptr;
 }
 void publish() {
     StaticJsonDocument<4096> out;
