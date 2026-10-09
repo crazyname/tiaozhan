@@ -1,0 +1,321 @@
+{
+  "schema": "qy-defense-metrics-v1",
+  "freeze_date": "2026-10-09",
+  "base_commit": "897f173b22e4ed4674f367918333cf0c6cbc3988",
+  "reported_source": "submission/03_作品说明书/青韵智控_作品说明书主稿.md#3-实际效果与实验验证",
+  "status": "reported_in_submission_not_independently_recomputed",
+  "source_raw_files": "not_located_in_public_repository",
+  "data_origin_note": "已在作品说明书报告为实物测试；本冻结只收录文档报告值，无法在当前仓库从原始测试文件独立复算。",
+  "metrics": [
+    {
+      "id": "MOS-01",
+      "name": "有效气敏响应通道",
+      "quantity": "4",
+      "unit": "channel",
+      "scope": "文稿有效响应通道；不能未经核验等同于4路TGS模拟ADC。",
+      "measured_source": "reported",
+      "ppt": "可写四个有效响应通道，但须附通道映射待核验"
+    },
+    {
+      "id": "MOS-02",
+      "name": "归一化响应幅度",
+      "min": 39.16,
+      "max": 67.36,
+      "unit": "percent",
+      "scope": "同一样品气敏重复响应区间",
+      "measured_source": "reported"
+    },
+    {
+      "id": "MOS-03",
+      "name": "响应时间",
+      "min": 58.6,
+      "max": 97.4,
+      "unit": "second",
+      "scope": "气敏响应时间，计算口径待原始记录核验",
+      "measured_source": "reported"
+    },
+    {
+      "id": "MOS-04",
+      "name": "重复测量平均变异系数CV",
+      "value": 6.18,
+      "unit": "percent",
+      "scope": "四有效通道测试指标，原始曲线及窗口待核验",
+      "measured_source": "reported"
+    },
+    {
+      "id": "MOS-05",
+      "name": "重复测量最大变异系数CV",
+      "value": 8.19,
+      "unit": "percent",
+      "scope": "四有效通道测试指标，原始曲线及窗口待核验",
+      "measured_source": "reported"
+    },
+    {
+      "id": "MOS-06",
+      "name": "短期基线漂移",
+      "value": 3.73,
+      "unit": "percent",
+      "scope": "所述测试环境内短期基线漂移；不能等同跨日/湿度补偿性能",
+      "measured_source": "reported"
+    },
+    {
+      "id": "SHT-01",
+      "name": "SHT31连续测试组数",
+      "value": 5,
+      "unit": "group",
+      "scope": "每组30min，1Hz",
+      "measured_source": "reported"
+    },
+    {
+      "id": "SHT-02",
+      "name": "SHT31每组测试时长",
+      "value": 30,
+      "unit": "minute",
+      "scope": "单组30min连续采集",
+      "measured_source": "reported"
+    },
+    {
+      "id": "SHT-03",
+      "name": "SHT31最低数据完整率",
+      "value": 99.72,
+      "unit": "percent",
+      "scope": "五组中最低，非总体平均",
+      "measured_source": "reported"
+    },
+    {
+      "id": "SHT-04",
+      "name": "SHT31最大温度偏差",
+      "value": 0.197,
+      "unit": "degree_C",
+      "scope": "对照参考仪器与工况待原始记录核验；空气温度非叶温",
+      "measured_source": "reported"
+    },
+    {
+      "id": "SHT-05",
+      "name": "SHT31最大湿度偏差",
+      "value": 1.506,
+      "unit": "percent_RH",
+      "scope": "参考仪器与工况待核验",
+      "measured_source": "reported"
+    },
+    {
+      "id": "HX-01",
+      "name": "HX711标定质量下限",
+      "value": 500,
+      "unit": "gram",
+      "scope": "500—5000g，10点，每点5次",
+      "measured_source": "reported"
+    },
+    {
+      "id": "HX-02",
+      "name": "HX711标定质量上限",
+      "value": 5000,
+      "unit": "gram",
+      "scope": "500—5000g，10点，每点5次",
+      "measured_source": "reported"
+    },
+    {
+      "id": "HX-03",
+      "name": "HX711标定点数",
+      "value": 10,
+      "unit": "point",
+      "scope": "每个点重复五次",
+      "measured_source": "reported"
+    },
+    {
+      "id": "HX-04",
+      "name": "HX711每点重复次数",
+      "value": 5,
+      "unit": "repeat",
+      "scope": "文稿报告",
+      "measured_source": "reported"
+    },
+    {
+      "id": "HX-05",
+      "name": "HX711平均相对误差",
+      "value": 0.162,
+      "unit": "percent",
+      "scope": "500—5000g标定范围内",
+      "measured_source": "reported"
+    },
+    {
+      "id": "HX-06",
+      "name": "HX711最大相对误差",
+      "value": 0.285,
+      "unit": "percent",
+      "scope": "500—5000g标定范围内",
+      "measured_source": "reported"
+    },
+    {
+      "id": "HX-07",
+      "name": "HX711最大CV",
+      "value": 0.204,
+      "unit": "percent",
+      "scope": "当前标定记录范围内",
+      "measured_source": "reported"
+    },
+    {
+      "id": "HX-08",
+      "name": "HX711线性拟合R平方",
+      "value": 0.99999986,
+      "unit": "dimensionless",
+      "scope": "仅指该批标定点拟合，非真实鲜叶失水准确率",
+      "measured_source": "reported"
+    },
+    {
+      "id": "RUN-01",
+      "name": "连续运行时长",
+      "value": 480,
+      "unit": "minute",
+      "scope": "文稿报告的该次1Hz连续采集，非完整8小时验收",
+      "measured_source": "reported"
+    },
+    {
+      "id": "RUN-02",
+      "name": "理论记录数",
+      "value": 28800,
+      "unit": "record",
+      "scope": "480min × 60s/min × 1Hz",
+      "measured_source": "reported"
+    },
+    {
+      "id": "RUN-03",
+      "name": "有效记录数",
+      "value": 28777,
+      "unit": "record",
+      "scope": "文稿报告，源文件未关联",
+      "measured_source": "reported"
+    },
+    {
+      "id": "RUN-04",
+      "name": "有效数据完整率",
+      "value": 99.92,
+      "unit": "percent",
+      "scope": "28777/28800四舍五入到小数点后2位",
+      "measured_source": "reported",
+      "derivation": {
+        "numerator": "RUN-03",
+        "denominator": "RUN-02",
+        "formula": "numerator/denominator*100",
+        "round_decimals": 2
+      }
+    },
+    {
+      "id": "RUN-05",
+      "name": "异常重启次数",
+      "value": 0,
+      "unit": "count",
+      "scope": "仅文稿报告该次480min试验",
+      "measured_source": "reported"
+    },
+    {
+      "id": "RUN-06",
+      "name": "最长连续缺失",
+      "value": 12,
+      "unit": "second",
+      "scope": "仅文稿报告该次480min试验",
+      "measured_source": "reported"
+    },
+    {
+      "id": "TEA-01",
+      "name": "静置样品联合采集累计时长",
+      "value": 120,
+      "unit": "minute",
+      "scope": "10窗口×12min，非完整做青",
+      "measured_source": "reported"
+    },
+    {
+      "id": "TEA-02",
+      "name": "静置样品理论记录",
+      "value": 7200,
+      "unit": "record",
+      "scope": "120min×60s/min×1Hz",
+      "measured_source": "reported"
+    },
+    {
+      "id": "TEA-03",
+      "name": "静置样品有效记录",
+      "value": 7194,
+      "unit": "record",
+      "scope": "10组×12min静置样品",
+      "measured_source": "reported"
+    },
+    {
+      "id": "TEA-04",
+      "name": "静置样品完整率",
+      "value": 99.92,
+      "unit": "percent",
+      "scope": "7194/7200四舍五入",
+      "measured_source": "reported",
+      "derivation": {
+        "numerator": "TEA-03",
+        "denominator": "TEA-02",
+        "formula": "numerator/denominator*100",
+        "round_decimals": 2
+      }
+    },
+    {
+      "id": "TEA-05",
+      "name": "静置样品初始质量",
+      "value": 4004.705,
+      "unit": "gram",
+      "scope": "文稿记录起点",
+      "measured_source": "reported"
+    },
+    {
+      "id": "TEA-06",
+      "name": "静置样品结束质量",
+      "value": 3906.172,
+      "unit": "gram",
+      "scope": "文稿记录终点",
+      "measured_source": "reported"
+    },
+    {
+      "id": "TEA-07",
+      "name": "静置样品质量减少",
+      "value": 98.533,
+      "unit": "gram",
+      "scope": "初始-末值；不等于含水率变化",
+      "measured_source": "reported",
+      "derivation": {
+        "minuend": "TEA-05",
+        "subtrahend": "TEA-06",
+        "formula": "minuend-subtrahend",
+        "round_decimals": 3
+      }
+    },
+    {
+      "id": "TEA-08",
+      "name": "相对样品质量变化",
+      "value": 2.46,
+      "unit": "percent",
+      "scope": "减少量/起始质量，不等于实际叶片绝对失水率",
+      "measured_source": "reported",
+      "derivation": {
+        "numerator": "TEA-07",
+        "denominator": "TEA-05",
+        "formula": "numerator/denominator*100",
+        "round_decimals": 2
+      }
+    }
+  ],
+  "versions": {
+    "hardware_pinout": "QY-HW-0.2-N8R8",
+    "controller": "ESP32-S3-DevKitC-1 N8R8",
+    "firmware": "QY-FW-0.4.0",
+    "protocol": "JSONL-v0.3",
+    "host": "host_mvp-v0.9.0",
+    "motor_design": "DRUM-v0.1",
+    "source_branch": "main at base_commit; PR #9 draft excluded"
+  },
+  "physical_evidence_index": {
+    "photo": null,
+    "raw_mos": null,
+    "raw_sht31": null,
+    "raw_hx711": null,
+    "raw_480min": null,
+    "raw_120min": null,
+    "calibration_certificate": null,
+    "note": "未在公开仓库定位；用户持有原始附件后填受控证据编号，不上传隐私数据到公开GitHub"
+  }
+}
