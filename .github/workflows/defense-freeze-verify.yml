@@ -1,0 +1,25 @@
+name: Defense metrics consistency
+on:
+  push:
+    branches:
+      - docs/defense-freeze-20261009
+    paths:
+      - 'docs/defense_freeze/**'
+      - 'scripts/verify_defense_metrics.py'
+      - '.github/workflows/defense-freeze-verify.yml'
+  pull_request:
+    paths:
+      - 'docs/defense_freeze/**'
+      - 'scripts/verify_defense_metrics.py'
+      - '.github/workflows/defense-freeze-verify.yml'
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python scripts/verify_defense_metrics.py
