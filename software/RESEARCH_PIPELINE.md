@@ -34,9 +34,27 @@ python -m software.analysis.pipeline data/raw/BATCH_XXX --output data/processed 
 
 当前未实现湿度补偿、视觉量化、叶温校准与机器学习意义上的状态估计。批次数据按完整文件载入内存；大数据前需压测。
 
+## 1.5 人工专家标签关联与多批次聚合
+
+先取得带 MASTER_CHECK、师傅正式标签、原始采集文件和处理特征的真实完整批次。curate 按相同主机时间轴，使用检查事件前、且默认不超过120秒的有效特征窗口关联标签；保留后续标签修订的最高版本，排除未知标签与明显无效窗口。需要人工审核人和独立证据索引，单靠设备源字段不能认证物理采样：
+
+~~~powershell
+python -m software.modeling.curate data/raw/BATCH_XXX data/processed/qy-features-v0.1_BATCH_XXX_... --reviewer 审核人 --physical-verified --evidence-ref 受控原始证据编号
+~~~
+
+没有核实真实来源时不得填写 --physical-verified；仅测试时可使用 --allow-simulation 对明确模拟源关联。每批输出 curated.csv 和 curation_manifest.json，其中的 physical_verified_asserted 仅记录人工声明，并非软件自动验真。
+
+汇集至少三个不同 batch_id 的审核批次（路径替换为实际目录）：
+
+~~~powershell
+python -m software.modeling.aggregate data/processed/curated/BATCH_A_DIR data/processed/curated/BATCH_B_DIR data/processed/curated/BATCH_C_DIR --output data/processed/aggregate
+~~~
+
+聚合会校验每批审核表的内容哈希、证据索引、行数、来源一致性、重复批次和最低独立批次数，生成 curated_all.csv 与 aggregate_manifest.json。后续建模的 curated.csv 参数可直接换成这个 curated_all.csv 路径。原始批次、模型输入和输出文件均不得互相覆盖。
+
 ## 2. 分批次基线建模（G3 离线）
 
-在可信数据获得后，由人工把处理结果与经专家审核的标签按采样时刻和事件整理成 curated.csv。**不允许将事件阶段 event_phase 自动当成专家真值。**
+在可信数据获得后，运行上一节审核关联与聚合命令生成 curated_all.csv；也可以在受控存储中对人工审核结果进行二次核对。**不允许将事件阶段 event_phase 自动当成专家真值。**
 
 最低字段：
 
