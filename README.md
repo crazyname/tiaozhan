@@ -165,6 +165,9 @@
 
 工程代码：
 
+[离线特征／专家标签关联／分批建模／影子建议程序及测试](software/RESEARCH_PIPELINE.md)：2026-10-09新增软件预研入口，仅为代码和合成数据验证，不构成真实做青状态识别或自动控制验收。
+
+
 上位机文档：[使用说明](software/host_mvp/README.md) · [开发文档](software/host_mvp/DEVELOPMENT.md) · [启动自检](software/host_mvp/PREFLIGHT.md) · [PR #7暂停交接](software/host_mvp/HANDOFF.md)。当前版本host v0.9 / firmware v0.4；软件测试、实物校准和长期运行验收分别记录，不把模拟结果当成实物验证。
 
 硬件文档：[GPIO与接线规范](hardware/PINOUT.md) · [ESP32-S3 N8R8 实测固件](hardware/esp32_s3_mvp/README.md) · [验证记录](hardware/esp32_s3_mvp/VALIDATION.md)。固件已编译通过，板上接线、标定与长期采集仍待验收。
