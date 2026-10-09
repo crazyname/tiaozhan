@@ -2,15 +2,20 @@ name: Defense metrics consistency
 on:
   push:
     branches:
+      - main
       - docs/defense-freeze-20261009
     paths:
       - 'docs/defense_freeze/**'
       - 'scripts/verify_defense_metrics.py'
+      - 'scripts/workbook_metrics.py'
+      - 'data/hardware_tests/**'
       - '.github/workflows/defense-freeze-verify.yml'
   pull_request:
     paths:
       - 'docs/defense_freeze/**'
       - 'scripts/verify_defense_metrics.py'
+      - 'scripts/workbook_metrics.py'
+      - 'data/hardware_tests/**'
       - '.github/workflows/defense-freeze-verify.yml'
 permissions:
   contents: read

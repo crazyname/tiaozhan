@@ -165,12 +165,12 @@
 
 工程代码：
 
-**挑战杯答辩2026-10-09软硬件与工程数据冻结：** [统一技术口径与数据状态](docs/14_答辩软硬件与工程数据冻结单_20261009.md) · [机器可校验指标JSON](docs/defense_freeze/metrics_20261009.json) · [17页PPT逐页替换与问答](submission/04_路演PPT/PPT_答辩数据替换与演示清单_20261009.md)。该冻结不开展真实做茶，数字沿用作品主稿但原始附件仍须核验。
+**挑战杯答辩2026-10-09软硬件与工程数据冻结：** [统一技术口径与数据状态](docs/14_答辩软硬件与工程数据冻结单_20261009.md) · [机器可校验指标JSON](docs/defense_freeze/metrics_20261009_v2.json) · [17页PPT逐页替换与问答](submission/04_路演PPT/PPT_答辩数据替换与演示清单_20261009.md)。硬件测试结果统一以[数据结果.xlsx](data/hardware_tests/数据结果.xlsx)为准，工作表位置、哈希及核对差异见[数据说明](data/hardware_tests/README.md)。本轮更新处理结果证据，不开展新的真实做茶。
 
 
 上位机文档：[使用说明](software/host_mvp/README.md) · [开发文档](software/host_mvp/DEVELOPMENT.md) · [启动自检](software/host_mvp/PREFLIGHT.md) · [PR #7暂停交接](software/host_mvp/HANDOFF.md)。当前版本host v0.9 / firmware v0.4；软件测试、实物校准和长期运行验收分别记录，不把模拟结果当成实物验证。
 
-硬件文档：[GPIO与接线规范](hardware/PINOUT.md) · [ESP32-S3 N8R8 实测固件](hardware/esp32_s3_mvp/README.md) · [验证记录](hardware/esp32_s3_mvp/VALIDATION.md)。固件已编译通过，板上接线、标定与长期采集仍待验收。
+硬件文档：[GPIO与接线规范](hardware/PINOUT.md) · [ESP32-S3 N8R8 实测固件](hardware/esp32_s3_mvp/README.md) · [验证记录](hardware/esp32_s3_mvp/VALIDATION.md)。固件已有编译验证；硬件测试结果以[数据结果.xlsx](data/hardware_tests/数据结果.xlsx)为准，表格未覆盖的设备安全和工艺效果须另行验收。
 
 - `hardware/`
 - `software/`

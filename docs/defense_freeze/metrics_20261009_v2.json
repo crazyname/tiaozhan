@@ -1,0 +1,430 @@
+{
+  "schema": "qy-defense-metrics-v2",
+  "freeze_date": "2026-10-09",
+  "base_commit": "897f173b22e4ed4674f367918333cf0c6cbc3988",
+  "reported_source": "data/hardware_tests/数据结果.xlsx",
+  "status": "processed_workbook_results_checked",
+  "source_raw_files": "processed_results_workbook_available_raw_time_series_not_included",
+  "data_origin_note": "硬件测试结果以用户指定的处理结果表格为准；表格原样提交，未变更数据、公式或是否可写标记。",
+  "metrics": [
+    {
+      "id": "MOS-01",
+      "name": "有效气敏响应通道",
+      "quantity": "4",
+      "unit": "channel",
+      "scope": "表格四通道为TGS2600/TGS2602/TGS2603电压与BME688气体电阻；处理结果，不等于单一香气分子浓度。",
+      "measured_source": "processed_workbook",
+      "ppt": "四个有效响应通道：三路TGS与一路BME688。正式申报使用遵循表格标记及后续确认。",
+      "workbook_reference": "电子鼻_处理结果!S8"
+    },
+    {
+      "id": "MOS-02",
+      "name": "归一化响应幅度",
+      "min": 39.16,
+      "max": 67.36,
+      "unit": "percent",
+      "scope": "表格四通道为TGS2600/TGS2602/TGS2603电压与BME688气体电阻；处理结果，不等于单一香气分子浓度。",
+      "measured_source": "processed_workbook",
+      "workbook_reference": "电子鼻_处理结果!G5:G8"
+    },
+    {
+      "id": "MOS-03",
+      "name": "响应时间",
+      "min": 58.6,
+      "max": 97.4,
+      "unit": "second",
+      "scope": "表格四通道为TGS2600/TGS2602/TGS2603电压与BME688气体电阻；处理结果，不等于单一香气分子浓度。",
+      "measured_source": "processed_workbook",
+      "workbook_reference": "电子鼻_处理结果!P5:P8"
+    },
+    {
+      "id": "MOS-04",
+      "name": "重复测量平均变异系数CV",
+      "value": 6.18,
+      "unit": "percent",
+      "scope": "表格四通道为TGS2600/TGS2602/TGS2603电压与BME688气体电阻；处理结果，不等于单一香气分子浓度。",
+      "measured_source": "processed_workbook",
+      "workbook_reference": "电子鼻_处理结果!O5:O8 平均"
+    },
+    {
+      "id": "MOS-05",
+      "name": "重复测量最大变异系数CV",
+      "value": 8.19,
+      "unit": "percent",
+      "scope": "表格四通道为TGS2600/TGS2602/TGS2603电压与BME688气体电阻；处理结果，不等于单一香气分子浓度。",
+      "measured_source": "processed_workbook",
+      "workbook_reference": "电子鼻_处理结果!S9"
+    },
+    {
+      "id": "MOS-06",
+      "name": "短期基线漂移",
+      "value": 3.73,
+      "unit": "percent",
+      "scope": "表格四通道为TGS2600/TGS2602/TGS2603电压与BME688气体电阻；处理结果，不等于单一香气分子浓度。",
+      "measured_source": "processed_workbook",
+      "workbook_reference": "电子鼻_处理结果!S10"
+    },
+    {
+      "id": "SHT-01",
+      "name": "SHT31连续测试组数",
+      "value": 5,
+      "unit": "group",
+      "scope": "每组30min，1Hz",
+      "measured_source": "processed_workbook",
+      "workbook_reference": "SHT31_处理结果!A5:A14 去除测点后5组"
+    },
+    {
+      "id": "SHT-02",
+      "name": "SHT31每组测试时长",
+      "value": 30.0,
+      "unit": "minute",
+      "scope": "单组30min连续采集",
+      "measured_source": "processed_workbook",
+      "workbook_reference": "SHT31_处理结果!C5:C14"
+    },
+    {
+      "id": "SHT-03",
+      "name": "SHT31最低数据完整率",
+      "value": 99.72,
+      "unit": "percent",
+      "scope": "五组中最低，非总体平均",
+      "measured_source": "processed_workbook",
+      "workbook_reference": "SHT31_处理结果!T5"
+    },
+    {
+      "id": "SHT-04",
+      "name": "SHT31最大温度偏差",
+      "value": 0.197,
+      "unit": "degree_C",
+      "scope": "表格给出参考值及偏差；测点为空气温湿度，参考仪表身份和溯源记录未附。",
+      "measured_source": "processed_workbook",
+      "workbook_reference": "SHT31_处理结果!T6"
+    },
+    {
+      "id": "SHT-05",
+      "name": "SHT31最大湿度偏差",
+      "value": 1.506,
+      "unit": "percent_RH",
+      "scope": "表格给出参考值及偏差；测点为空气温湿度，参考仪表身份和溯源记录未附。",
+      "measured_source": "processed_workbook",
+      "workbook_reference": "SHT31_处理结果!T7"
+    },
+    {
+      "id": "HX-01",
+      "name": "HX711标定质量下限",
+      "value": 500.0,
+      "unit": "gram",
+      "scope": "500—5000g，10点，每点5次",
+      "measured_source": "processed_workbook",
+      "workbook_reference": "HX711_标定结果!A5"
+    },
+    {
+      "id": "HX-02",
+      "name": "HX711标定质量上限",
+      "value": 5000.0,
+      "unit": "gram",
+      "scope": "500—5000g，10点，每点5次",
+      "measured_source": "processed_workbook",
+      "workbook_reference": "HX711_标定结果!A14"
+    },
+    {
+      "id": "HX-03",
+      "name": "HX711标定点数",
+      "value": 10,
+      "unit": "point",
+      "scope": "每个点重复五次",
+      "measured_source": "processed_workbook",
+      "workbook_reference": "HX711_标定结果!A5:A14 10点"
+    },
+    {
+      "id": "HX-04",
+      "name": "HX711每点重复次数",
+      "value": 5,
+      "unit": "repeat",
+      "scope": "文稿报告",
+      "measured_source": "processed_workbook",
+      "workbook_reference": "HX711_标定结果!B5:F14 每点5次"
+    },
+    {
+      "id": "HX-05",
+      "name": "HX711平均相对误差",
+      "value": 0.162,
+      "unit": "percent",
+      "scope": "500—5000g标定范围内",
+      "measured_source": "processed_workbook",
+      "workbook_reference": "HX711_标定结果!P5"
+    },
+    {
+      "id": "HX-06",
+      "name": "HX711最大相对误差",
+      "value": 0.285,
+      "unit": "percent",
+      "scope": "500—5000g标定范围内",
+      "measured_source": "processed_workbook",
+      "workbook_reference": "HX711_标定结果!P6"
+    },
+    {
+      "id": "HX-07",
+      "name": "HX711最大CV",
+      "value": 0.204,
+      "unit": "percent",
+      "scope": "当前标定记录范围内",
+      "measured_source": "processed_workbook",
+      "workbook_reference": "HX711_标定结果!P7"
+    },
+    {
+      "id": "HX-08",
+      "name": "HX711线性拟合R平方",
+      "value": 0.99999986,
+      "unit": "dimensionless",
+      "scope": "仅指该批标定点拟合，非真实鲜叶失水准确率",
+      "measured_source": "processed_workbook",
+      "workbook_reference": "HX711_标定结果!P8"
+    },
+    {
+      "id": "RUN-01",
+      "name": "连续运行时长",
+      "value": 480.0,
+      "unit": "minute",
+      "scope": "文稿报告的该次1Hz连续采集，非完整8小时验收",
+      "measured_source": "processed_workbook",
+      "workbook_reference": "整机稳定性!C14"
+    },
+    {
+      "id": "RUN-02",
+      "name": "理论记录数",
+      "value": 28800.0,
+      "unit": "record",
+      "scope": "480min × 60s/min × 1Hz",
+      "measured_source": "processed_workbook",
+      "workbook_reference": "整机稳定性!E14"
+    },
+    {
+      "id": "RUN-03",
+      "name": "有效记录数",
+      "value": 28777.0,
+      "unit": "record",
+      "scope": "整机稳定性RUN10，2026-09-27；完整率按有效数/理论数，不等于全部安全验收。",
+      "measured_source": "processed_workbook",
+      "workbook_reference": "整机稳定性!F14"
+    },
+    {
+      "id": "RUN-04",
+      "name": "有效数据完整率",
+      "value": 99.92,
+      "unit": "percent",
+      "scope": "整机稳定性RUN10，2026-09-27；完整率按有效数/理论数，不等于全部安全验收。",
+      "measured_source": "processed_workbook",
+      "derivation": {
+        "numerator": "RUN-03",
+        "denominator": "RUN-02",
+        "formula": "numerator/denominator*100",
+        "round_decimals": 2
+      },
+      "workbook_reference": "整机稳定性!G14"
+    },
+    {
+      "id": "RUN-05",
+      "name": "异常重启次数",
+      "value": 0.0,
+      "unit": "count",
+      "scope": "整机稳定性RUN10，2026-09-27；完整率按有效数/理论数，不等于全部安全验收。",
+      "measured_source": "processed_workbook",
+      "workbook_reference": "整机稳定性!I14"
+    },
+    {
+      "id": "RUN-06",
+      "name": "最长连续缺失",
+      "value": 12.0,
+      "unit": "second",
+      "scope": "整机稳定性RUN10，2026-09-27；完整率按有效数/理论数，不等于全部安全验收。",
+      "measured_source": "processed_workbook",
+      "workbook_reference": "整机稳定性!K14"
+    },
+    {
+      "id": "TEA-01",
+      "name": "静置样品联合采集累计时长",
+      "value": 120.0,
+      "unit": "minute",
+      "scope": "联合采集汇总JOINT01—JOINT10；静置样品、10窗口，不是完整做青或绝对含水率。",
+      "measured_source": "processed_workbook",
+      "workbook_reference": "联合采集汇总!C5:C14 求和"
+    },
+    {
+      "id": "TEA-02",
+      "name": "静置样品理论记录",
+      "value": 7200.0,
+      "unit": "record",
+      "scope": "联合采集汇总JOINT01—JOINT10；静置样品、10窗口，不是完整做青或绝对含水率。",
+      "measured_source": "processed_workbook",
+      "workbook_reference": "联合采集汇总!M5:M14 求和"
+    },
+    {
+      "id": "TEA-03",
+      "name": "静置样品有效记录",
+      "value": 7194.0,
+      "unit": "record",
+      "scope": "联合采集汇总JOINT01—JOINT10；静置样品、10窗口，不是完整做青或绝对含水率。",
+      "measured_source": "processed_workbook",
+      "workbook_reference": "联合采集汇总!N5:N14 求和"
+    },
+    {
+      "id": "TEA-04",
+      "name": "静置样品完整率",
+      "value": 99.92,
+      "unit": "percent",
+      "scope": "联合采集汇总JOINT01—JOINT10；静置样品、10窗口，不是完整做青或绝对含水率。",
+      "measured_source": "processed_workbook",
+      "derivation": {
+        "numerator": "TEA-03",
+        "denominator": "TEA-02",
+        "formula": "numerator/denominator*100",
+        "round_decimals": 2
+      },
+      "workbook_reference": "联合采集汇总!N5:N14总和/M5:M14总和"
+    },
+    {
+      "id": "TEA-05",
+      "name": "静置样品初始质量",
+      "value": 4004.705,
+      "unit": "gram",
+      "scope": "联合采集汇总JOINT01—JOINT10；静置样品、10窗口，不是完整做青或绝对含水率。",
+      "measured_source": "processed_workbook",
+      "workbook_reference": "联合采集汇总!I5"
+    },
+    {
+      "id": "TEA-06",
+      "name": "静置样品结束质量",
+      "value": 3906.172,
+      "unit": "gram",
+      "scope": "联合采集汇总JOINT01—JOINT10；静置样品、10窗口，不是完整做青或绝对含水率。",
+      "measured_source": "processed_workbook",
+      "workbook_reference": "联合采集汇总!J14"
+    },
+    {
+      "id": "TEA-07",
+      "name": "静置样品质量减少",
+      "value": 98.533,
+      "unit": "gram",
+      "scope": "联合采集汇总JOINT01—JOINT10；静置样品、10窗口，不是完整做青或绝对含水率。",
+      "measured_source": "processed_workbook",
+      "derivation": {
+        "minuend": "TEA-05",
+        "subtrahend": "TEA-06",
+        "formula": "minuend-subtrahend",
+        "round_decimals": 3
+      },
+      "workbook_reference": "联合采集汇总!I5-J14"
+    },
+    {
+      "id": "TEA-08",
+      "name": "相对样品质量变化",
+      "value": 2.46,
+      "unit": "percent",
+      "scope": "联合采集汇总JOINT01—JOINT10；静置样品、10窗口，不是完整做青或绝对含水率。",
+      "measured_source": "processed_workbook",
+      "derivation": {
+        "numerator": "TEA-07",
+        "denominator": "TEA-05",
+        "formula": "numerator/denominator*100",
+        "round_decimals": 2
+      },
+      "workbook_reference": "联合采集汇总!(I5-J14)/I5*100"
+    }
+  ],
+  "versions": {
+    "hardware_pinout": "QY-HW-0.2-N8R8",
+    "controller": "ESP32-S3-DevKitC-1 N8R8",
+    "firmware": "QY-FW-0.4.0",
+    "protocol": "JSONL-v0.3",
+    "host": "host_mvp-v0.9.0",
+    "motor_design": "DRUM-v0.1",
+    "source_branch": "main at base_commit; PR #9 draft excluded"
+  },
+  "physical_evidence_index": {
+    "photo": null,
+    "raw_mos": null,
+    "raw_sht31": null,
+    "raw_hx711": null,
+    "raw_480min": null,
+    "raw_120min": null,
+    "calibration_certificate": null,
+    "note": "处理结果工作簿已挂接，原始逐秒日志、照片与外部标定证书不在此文件内；不将处理表认证为全系统实物验收。",
+    "processed_workbook": "data/hardware_tests/数据结果.xlsx"
+  },
+  "freeze_id": "DEFENSE-20261009-v2",
+  "authoritative_workbook": {
+    "path": "data/hardware_tests/数据结果.xlsx",
+    "sha256": "93ee36892fc3daf214bf5d4f01eeb80dd4a6aca8d9c66c9a180458fda2f76897",
+    "sheets": [
+      "填写说明",
+      "电子鼻_处理结果",
+      "SHT31_处理结果",
+      "HX711_标定结果",
+      "整机稳定性",
+      "联合采集汇总",
+      "申报材料摘要"
+    ],
+    "submission_flags": [
+      "否",
+      "否",
+      "否",
+      "否",
+      "否",
+      "否",
+      "否",
+      "否",
+      "否",
+      "否",
+      "否"
+    ],
+    "submission_usage": "原表申报材料摘要E4:E14均为否；保留原标记，是否属于旧标记待明确。"
+  },
+  "workbook_notes": {
+    "packet_count_discrepancies": [
+      {
+        "test_id": "RUN03",
+        "count_difference": 6,
+        "reported_packet_loss": 5.0
+      },
+      {
+        "test_id": "RUN04",
+        "count_difference": 6,
+        "reported_packet_loss": 5.0
+      },
+      {
+        "test_id": "RUN05",
+        "count_difference": 9,
+        "reported_packet_loss": 8.0
+      },
+      {
+        "test_id": "RUN06",
+        "count_difference": 9,
+        "reported_packet_loss": 8.0
+      },
+      {
+        "test_id": "RUN07",
+        "count_difference": 10,
+        "reported_packet_loss": 8.0
+      },
+      {
+        "test_id": "RUN08",
+        "count_difference": 22,
+        "reported_packet_loss": 20.0
+      },
+      {
+        "test_id": "RUN09",
+        "count_difference": 23,
+        "reported_packet_loss": 20.0
+      },
+      {
+        "test_id": "RUN10",
+        "count_difference": 23,
+        "reported_packet_loss": 20.0
+      }
+    ],
+    "packet_loss_definition": "完整率按有效数/理论数；不将理论数与有效数的差直接等同于表格丢包数字段。",
+    "mass_change_sign": "原表结束减初始为负；材料中的质量减少量取相反数，2.46%为相对起始质量。",
+    "sht_groups": "5组，每组环境与采样腔两测点，共10行，不是10个独立组。"
+  }
+}
