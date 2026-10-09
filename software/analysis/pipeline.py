@@ -212,7 +212,7 @@ def extract_batch(batch_dir: Path, window_s=60, step_s=30, min_count=5):
 def export(batch_dir, output_root, **kwargs):
     features, manifest = extract_batch(Path(batch_dir), **kwargs)
     out_root = Path(output_root).resolve()
-    if out_root == Path(batch_dir).resolve() or out_root.is_relative_to(Path(batch_dir).resolve()):
+    if 'raw' in out_root.parts or out_root == Path(batch_dir).resolve() or out_root.is_relative_to(Path(batch_dir).resolve()):
         raise ValueError('cannot write into raw batch')
     out_root.mkdir(parents=True, exist_ok=True)
     out = out_root / f'{VERSION}_{Path(batch_dir).name}_{uuid.uuid4().hex[:12]}'
