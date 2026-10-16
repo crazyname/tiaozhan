@@ -1,9 +1,22 @@
-# Python
+# Python / tooling
 __pycache__/
 *.py[cod]
 .venv/
 venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
 .pio/
+.platformio/
+
+# Secrets and local configuration (do not commit sensitive materials)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
 
 # IDE / OS
 .vscode/
@@ -11,16 +24,18 @@ venv/
 .DS_Store
 Thumbs.db
 
-# Local experiment data: raw data should be backed up separately before any curated upload
+# Raw and locally generated experimental output: back up outside Git
 data/raw/*
 data/device_logs/
 data/preflight/
+data/reports/
 !data/raw/.gitkeep
 
-# Generated logs / caches
+# Runtime artifacts
 *.log
 *.tmp
 
-# Presentation / Office temporary files
+# Office temporary files
 ~$*.pptx
 ~$*.docx
+~$*.xlsx
