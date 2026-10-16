@@ -18,7 +18,7 @@
 | Python / PySide6 上位机 | [software/host_mvp](software/host_mvp) | 串口采集、批次档案、事件及标签、相机、数据回放、工程分析 |
 | 软件与固件测试 | [software/host_mvp 单元测试](software/host_mvp) · [hardware/esp32_s3_mvp/test](hardware/esp32_s3_mvp/test) | 合成场景、业务逻辑和协议行为回归 |
 | 测试结果与证据约束 | [data/hardware_tests](data/hardware_tests) | 已提供的**处理结果工作簿**及其局限性、复核口径 |
-| 竞赛和研究资料 | [docs](docs) · [submission](submission) | 实验 SOP、研究计划、证据台账、挑战杯申报及答辩归档 |
+| 研究与实验资料 | [docs](docs) | 研究报告、文献、实验 SOP、BOM、开发路线与验证标准 |
 
 设计中的总体流程为：
 
@@ -58,10 +58,9 @@ Linux/macOS 请使用 `./.venv/bin/python` 替换 Windows 的解释器路径。�
 ~~~text
 hardware/              ESP32-S3固件、接线与电机控制基准
 software/host_mvp/     PySide6采集工作台、回放、测试
-scripts/               数据与答辩指标一致性复核
+scripts/               处理结果与工作簿指标一致性复核
 data/hardware_tests/   经整理的测试结果与说明（非全量原始数据）
 docs/                  架构、快速开始、实验SOP和研发文档
-submission/            挑战杯申报书与答辩资料（保留历史）
 .github/               自动检查和社区协作模板
 ~~~
 
@@ -69,7 +68,7 @@ submission/            挑战杯申报书与答辩资料（保留历史）
 
 ## 许可证、来源与使用风险
 
-项目贡献者原创的**软件、固件、脚本**采用 [MIT License](LICENSE)；许可证的具体适用范围和素材/数据例外见 [NOTICE](NOTICE.md)。竞赛文档、演示图像、处理数据和其他第三方素材，**不应因仓库公开而自动视为可自由再分发或商用**。
+项目贡献者原创的**软件、固件、脚本**采用 [MIT License](LICENSE)；许可证的具体适用范围和素材/数据例外见 [NOTICE](NOTICE.md)。研究文档、演示素材、处理数据和其他第三方内容，**不应因仓库公开而自动视为可自由再分发或商用**。
 
 涉及电机、泵阀与电气设备的演示和控制逻辑仅供研发，**不构成安全认证**。独立硬件急停、供电隔离、故障停机与实物验收须自行完成；请勿将软件 STOP 或串口断连当作物理急停。
 

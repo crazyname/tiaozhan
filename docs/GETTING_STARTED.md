@@ -65,7 +65,7 @@ python app.py --port COM12
 
 - 项目提供的处理工作簿：[data/hardware_tests/](../data/hardware_tests/)；**不包含完整原始逐秒传感日志**。
 - 采样实验 SOP：[docs/10_第一批做青采样SOP.md](10_第一批做青采样SOP.md)。
-- 历史答辩技术冻结：[docs/14_答辩软硬件与工程数据冻结单_20261009.md](14_答辩软硬件与工程数据冻结单_20261009.md)。
-- 指标与工作簿的一致性校验，从根目录执行 `python scripts/verify_defense_metrics.py`。校验仅复算已提供材料，不认证实验事实本身。
+- 处理结果指标索引：[data/hardware_tests/metrics_20261009_v2.json](../data/hardware_tests/metrics_20261009_v2.json)，与处理工作簿对应。
+- 指标与工作簿的一致性校验，从根目录执行 `python scripts/verify_hardware_results.py`。校验仅复算已提供材料，不认证实验事实本身。
 
 报告必须注明来源（模拟/实物/人工输入）、硬件与软件版本、批次、标定、环境条件及原始记录是否可审计。
