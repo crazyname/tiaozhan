@@ -16,7 +16,7 @@
 | ESP32-S3 采集与执行固件 | [hardware/esp32_s3_mvp](hardware/esp32_s3_mvp) | 三路 TGS 气敏 + BME688、SHT31、MLX90614、HX711 接口；泵阀及可选滚筒控制逻辑 |
 | 硬件配置与接线 | [hardware](hardware) | 引脚、电气规范、器件接线及滚筒基准 |
 | Python / PySide6 上位机 | [software/host_mvp](software/host_mvp) | 串口采集、批次档案、事件及标签、相机、数据回放、工程分析 |
-| 软件与固件测试 | [software/host_mvp/test_*.py](software/host_mvp) · [hardware/esp32_s3_mvp/test](hardware/esp32_s3_mvp/test) | 合成场景、业务逻辑和协议行为回归 |
+| 软件与固件测试 | [software/host_mvp 单元测试](software/host_mvp) · [hardware/esp32_s3_mvp/test](hardware/esp32_s3_mvp/test) | 合成场景、业务逻辑和协议行为回归 |
 | 测试结果与证据约束 | [data/hardware_tests](data/hardware_tests) | 已提供的**处理结果工作簿**及其局限性、复核口径 |
 | 竞赛和研究资料 | [docs](docs) · [submission](submission) | 实验 SOP、研究计划、证据台账、挑战杯申报及答辩归档 |
 
