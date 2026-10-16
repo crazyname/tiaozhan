@@ -1,6 +1,5 @@
-"""Check frozen metrics against the authoritative processed XLSX and arithmetic.
+"""Check versioned hardware test results against the processed XLSX and arithmetic.
 
-The original v1 JSON remains supported as a historical document-only freeze.
 Workbook checks do not certify hardware or replace raw time-series validation.
 """
 from __future__ import annotations
@@ -83,7 +82,7 @@ def check_metrics(data):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("metrics", nargs="?", type=Path,
-                        default=Path(__file__).resolve().parents[1] / "docs/defense_freeze/metrics_20261009_v2.json")
+                        default=Path(__file__).resolve().parents[1] / "data/hardware_tests/metrics_20261009_v2.json")
     args = parser.parse_args()
     summary = check_metrics(json.loads(args.metrics.read_text(encoding="utf-8")))
     print(json.dumps(summary, ensure_ascii=False, indent=2))

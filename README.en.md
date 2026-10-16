@@ -17,7 +17,6 @@ QingYun Tea Control is an open-source **research prototype** for the *zuoqing* s
 | Firmware and desktop regression tests | [hardware/esp32_s3_mvp/test/](hardware/esp32_s3_mvp/test) and [software/host_mvp/](software/host_mvp) |
 | Curated hardware result workbook and limitations | [data/hardware_tests/](data/hardware_tests) |
 | Architecture, experimental procedures and development records | [docs/](docs) |
-| Historical student competition submission materials | [submission/](submission) |
 
 ## Run the desktop demo
 

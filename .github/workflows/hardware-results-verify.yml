@@ -1,0 +1,29 @@
+name: Hardware result consistency
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'data/hardware_tests/**'
+      - 'scripts/verify_hardware_results.py'
+      - 'scripts/workbook_metrics.py'
+      - '.github/workflows/hardware-results-verify.yml'
+  pull_request:
+    paths:
+      - 'data/hardware_tests/**'
+      - 'scripts/verify_hardware_results.py'
+      - 'scripts/workbook_metrics.py'
+      - '.github/workflows/hardware-results-verify.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python scripts/verify_hardware_results.py
